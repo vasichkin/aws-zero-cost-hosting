@@ -1,0 +1,10 @@
+project_name = "minimal-aws"
+environment  = "dev"
+aws_region   = "eu-west-3"
+
+# iam_permissions_boundary_arn = "arn:aws:iam::ACCOUNT_ID:policy/YourBoundaryPolicy"
+
+tags = {
+  Owner   = "your-name"
+  Project = "minimal_aws_hosting"
+}

@@ -1,0 +1,7 @@
+project_name = "minimal-aws"
+aws_region   = "eu-west-3"
+
+tags = {
+  Owner   = "your-name"
+  Project = "minimal_aws_hosting"
+}
