@@ -55,6 +55,12 @@ variable "iam_permissions_boundary_arn" {
   default     = ""
 }
 
+variable "enable_dynamodb_pitr" {
+  description = "Enable point-in-time recovery for the metadata table."
+  type        = bool
+  default     = true
+}
+
 variable "tags" {
   description = "Additional tags applied to all resources."
   type        = map(string)

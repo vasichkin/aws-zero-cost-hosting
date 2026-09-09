@@ -1,4 +1,4 @@
-.PHONY: bootstrap-init bootstrap-plan bootstrap-apply dev-init dev-plan dev-apply prod-init prod-plan prod-apply fmt validate
+.PHONY: bootstrap-init bootstrap-plan bootstrap-apply dev-init dev-plan dev-apply dev-destroy prod-init prod-plan prod-apply fmt validate
 
 ENV_DEV  := environments/dev
 ENV_PROD := environments/prod
@@ -21,6 +21,9 @@ dev-plan:
 
 dev-apply:
 	cd $(ENV_DEV) && tofu apply
+
+dev-destroy:
+	cd $(ENV_DEV) && tofu destroy
 
 prod-init:
 	cd $(ENV_PROD) && tofu init -backend-config=backend.hcl

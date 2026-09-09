@@ -12,6 +12,13 @@ resource "aws_cloudfront_function" "admin_spa_fallback" {
   code    = file("${path.module}/functions/admin-spa-fallback.js")
 }
 
+resource "aws_cloudfront_function" "public_directory_index" {
+  name    = replace("${var.distribution_name}-public-directory-index", ".", "-")
+  runtime = "cloudfront-js-2.0"
+  publish = true
+  code    = file("${path.module}/functions/public-directory-index.js")
+}
+
 resource "aws_cloudfront_distribution" "this" {
   enabled             = true
   is_ipv6_enabled     = true
@@ -48,6 +55,11 @@ resource "aws_cloudfront_distribution" "this" {
     forwarded_values {
       query_string = false
       cookies { forward = "none" }
+    }
+
+    function_association {
+      event_type   = "viewer-request"
+      function_arn = aws_cloudfront_function.public_directory_index.arn
     }
 
     min_ttl     = 0
@@ -122,14 +134,14 @@ resource "aws_cloudfront_distribution" "this" {
 
   custom_error_response {
     error_code         = 403
-    response_code      = 200
-    response_page_path = "/index.html"
+    response_code      = 404
+    response_page_path = "/404.html"
   }
 
   custom_error_response {
     error_code         = 404
-    response_code      = 200
-    response_page_path = "/index.html"
+    response_code      = 404
+    response_page_path = "/404.html"
   }
 
   restrictions {

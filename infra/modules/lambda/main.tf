@@ -60,6 +60,12 @@ variable "tags" {
   default     = {}
 }
 
+variable "log_retention_days" {
+  description = "CloudWatch Logs retention in days for this function's log group."
+  type        = number
+  default     = 14
+}
+
 data "archive_file" "lambda" {
   type        = "zip"
   source_dir  = var.source_dir
@@ -96,6 +102,12 @@ resource "aws_iam_role_policy_attachment" "basic_execution" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
+resource "aws_cloudwatch_log_group" "this" {
+  name              = "/aws/lambda/${var.function_name}"
+  retention_in_days = var.log_retention_days
+  tags              = var.tags
+}
+
 resource "aws_lambda_function" "this" {
   function_name = var.function_name
   role          = aws_iam_role.this.arn
@@ -115,6 +127,8 @@ resource "aws_lambda_function" "this" {
   tags = merge(var.tags, {
     Name = var.function_name
   })
+
+  depends_on = [aws_cloudwatch_log_group.this]
 }
 
 output "function_name" {

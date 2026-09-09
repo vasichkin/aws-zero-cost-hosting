@@ -197,8 +197,11 @@ make bootstrap-apply    # state bucket + lock table
 make prod-init-first    # copy backend.hcl.example → backend.hcl, init
 make prod-init          # init with existing backend.hcl
 make prod-apply
+make dev-destroy        # tear down dev when not actively developing
 make fmt validate
 ```
+
+`dev` provisions its own CloudFront distribution, Cognito pool, DynamoDB table, and S3 bucket alongside `prod`. These are usage-based and cost ~$0 idle, but run `make dev-destroy` when you're done with a session to avoid leaving duplicate baseline resources around.
 
 ## Outputs
 

@@ -138,7 +138,7 @@ module "metadata_table" {
   source = "../../modules/dynamodb"
 
   table_name                    = "${local.name_prefix}-metadata"
-  enable_point_in_time_recovery = true
+  enable_point_in_time_recovery = var.enable_dynamodb_pitr
   tags                          = local.common_tags
 }
 
@@ -247,4 +247,36 @@ module "cloudfront" {
   tags = local.common_tags
 
   depends_on = [module.api]
+}
+
+resource "aws_budgets_budget" "monthly_cost" {
+  name         = "${local.name_prefix}-monthly-cost"
+  budget_type  = "COST"
+  limit_amount = "50"
+  limit_unit   = "USD"
+  time_unit    = "MONTHLY"
+
+  notification {
+    comparison_operator        = "GREATER_THAN"
+    threshold                  = 10 # ~$5
+    threshold_type             = "PERCENTAGE"
+    notification_type          = "ACTUAL"
+    subscriber_email_addresses = [var.admin_email]
+  }
+
+  notification {
+    comparison_operator        = "GREATER_THAN"
+    threshold                  = 40 # ~$20
+    threshold_type             = "PERCENTAGE"
+    notification_type          = "ACTUAL"
+    subscriber_email_addresses = [var.admin_email]
+  }
+
+  notification {
+    comparison_operator        = "GREATER_THAN"
+    threshold                  = 100 # $50
+    threshold_type             = "PERCENTAGE"
+    notification_type          = "ACTUAL"
+    subscriber_email_addresses = [var.admin_email]
+  }
 }
