@@ -1,8 +1,8 @@
 # Cost of ownership (TCO)
 
-Estimated running costs for the **minimal-aws** stack: static site + admin + API on CloudFront, S3, Lambda, API Gateway, Cognito, DynamoDB, and SES.
+Estimated running costs for the **minimal-aws** stack: static site + contact API on CloudFront, S3, Lambda, API Gateway, SES, plus Cognito and DynamoDB reserved for the admin project (separate, TBD).
 
-**Region:** primary workloads in **eu-west-3** (Paris); ACM cert in **us-east-1** (required by CloudFront, no extra cert charge).
+**Region:** code defaults to **eu-west-3** (Paris); the current deployment runs in **eu-north-1** (Stockholm). Prices below are close for both, but re-check for eu-north-1. ACM cert in **us-east-1** (required by CloudFront, no extra cert charge).
 
 Prices are **approximate USD**, pay-as-you-go. Verify on the [AWS Pricing Calculator](https://calculator.aws/) and [AWS Free Tier](https://aws.amazon.com/free/) — AWS updates rates and free-tier rules periodically.
 
@@ -13,20 +13,21 @@ Prices are **approximate USD**, pay-as-you-go. Verify on the [AWS Pricing Calcul
 | Service | Resource | Billing model | Notes |
 |---|---|---|---|
 | **CloudFront** | 1 distribution, PriceClass_100 | Per request + data transfer out | S3→CloudFront origin transfer is **free** |
-| **CloudFront Functions** | 2 functions (API strip, admin SPA) | Per invocation | Cheap; 2M invocations/month always free |
-| **S3** | Site bucket + OpenTofu state bucket | Storage + requests | No public internet egress (CloudFront/OAC only) |
-| **Lambda** | `publish` (512 MB, 60 s), `contact` (128 MB, 10 s) | Per request + GB-seconds | ARM64 |
-| **API Gateway** | HTTP API (v2) | Per million requests | No REST API premium features |
-| **DynamoDB** | Metadata table, on-demand | Per read/write request + storage | **PITR enabled in prod** (extra line item) |
+| **CloudFront Functions** | 3 functions (directory index, API strip, admin SPA) | Per invocation | Cheap; 2M invocations/month always free |
+| **S3** | Site bucket + OpenTofu state bucket | Storage + requests | No public internet egress (CloudFront/OAC only). Both versioned; site bucket expires old versions after 30 days |
+| **Lambda** | `contact` (128 MB, 10 s) | Per request + GB-seconds | ARM64, Python 3.12 |
+| **API Gateway** | HTTP API (v2) | Per million requests | No REST API premium features; contact route throttled (burst 10, 5 rps) |
+| **DynamoDB** | Metadata table, on-demand (reserved for admin project) | Per read/write request + storage | **PITR enabled in prod** (extra line item) |
 | **DynamoDB** | State lock table (bootstrap) | On-demand | Negligible |
-| **Cognito** | 1 user pool, admin client | Per MAU | 1–few admin users |
+| **Cognito** | 1 user pool, admin client (reserved for admin project) | Per MAU | 1–few admin users |
 | **SES** | Verified email identity | Per email sent | Contact form only |
 | **ACM** | TLS cert (apex + www) | — | **Free** |
-| **CloudWatch Logs** | Lambda execution logs | Ingestion + storage | Often the first “surprise” at scale |
+| **CloudWatch Logs** | Lambda execution logs | Ingestion + storage | 14-day retention set in code; ingestion is the first “surprise” at scale |
+| **AWS Budgets** | 1 cost budget ($50/month, 3 email alerts) | — | **Free** (no budget actions) |
 
 **Not in this stack (no cost from Terraform):** EC2, ALB, NAT Gateway, Route 53 hosted zone, RDS, ElastiCache, WAF.
 
-**External (non-AWS):** domain registration/renewal at your registrar (e.g. `.com.ua`).
+**External (non-AWS):** domain registration/renewal at your registrar (e.g. `.com.ua`); Google reCAPTCHA v3 for the contact form (free tier).
 
 ---
 
@@ -39,7 +40,7 @@ Relevant **always-free** limits (typical — confirm for your account):
 | Service | Always-free allowance (monthly) | Fits this stack? |
 |---|---|---|
 | **CloudFront** | 1 TB data transfer out, 10M HTTP(S) requests | Yes — main public traffic |
-| **Lambda** | 1M requests, 400K GB-seconds | Yes — admin publish + contact |
+| **Lambda** | 1M requests, 400K GB-seconds | Yes — contact form |
 | **DynamoDB** | 25 GB storage, 25 RCU/WCU worth of on-demand* | Yes — small metadata table |
 | **Cognito** | 50,000 MAU | Yes — few admins |
 | **S3** | 5 GB storage (often 12-month for new accounts) | Yes — small static site |
@@ -53,7 +54,7 @@ Relevant **always-free** limits (typical — confirm for your account):
 
 - **S3 direct egress to internet is not free** — this design avoids it by serving only via CloudFront.
 - **DynamoDB PITR** (enabled in prod) is **not** covered by free tier (~$0.20/GB-month of table size).
-- **CloudFront invalidations** — first 1,000 paths/month free; then ~$0.005/path (publish Lambda can trigger these).
+- **CloudFront invalidations** — first 1,000 paths/month free; then ~$0.005/path (manual invalidations, or the future admin publish flow).
 - **SES sandbox** — new accounts can only send to verified addresses until you request production access.
 - **Legacy accounts** (created before July 2025) may still be on the old 12-month free-tier model.
 
@@ -190,17 +191,21 @@ There is **no hourly charge** for CloudFront, Lambda (when not invoked), API Gat
 | **PriceClass_100** | Cheaper CDN POP set (US/EU; fine for `.ua` audience) |
 | **External DNS** | No Route 53 hosted zone ($0.50/month saved) |
 | **ACM for TLS** | Free certificates |
+| **AWS Budgets alerts** | $50/month budget, emails at ~$5 / $20 / $50 (`aws_budgets_budget.monthly_cost`) |
+| **Lambda log retention 14 days** | Caps CloudWatch Logs storage (`log_retention_days`) |
+| **S3 noncurrent-version expiry (30 days)** | Old object versions don't accumulate |
+| **API throttling + reCAPTCHA on contact** | Limits API Gateway / Lambda / SES cost from abuse |
 
 ---
 
 ## Watch list (hidden costs)
 
-1. **CloudFront invalidations** — publish Lambda invalidates `/*`; batch or narrow paths if admin publishes often.
-2. **CloudWatch Logs** — default Lambda log retention is forever; set retention (e.g. 14 days) to cap storage.
+1. **CloudFront invalidations** — when the admin publish flow is built, batch or narrow paths rather than invalidating `/*` on every publish.
+2. **CloudWatch Logs** — retention is 14 days, but ingestion still bills per GB; keep handler logging lean.
 3. **DynamoDB PITR** — disable in dev; keep in prod only if you need point-in-time recovery.
 4. **SES** — sandbox limits; production access required for public contact forms.
 5. **Large `/photos/` library** — S3 storage grows linearly; CloudFront caches but origin storage bills.
-6. **API abuse** — public `/api/*` can spike API Gateway + Lambda; add auth/rate limits when handlers are live.
+6. **API abuse** — the public contact route is throttled (burst 10, 5 rps) and protected by reCAPTCHA v3 + honeypot; admin routes should use the Cognito JWT authorizer. Revisit limits if traffic grows.
 7. **Multi-environment** — dev + prod doubles baseline S3/DynamoDB/Cognito if both left running.
 
 ---
@@ -221,9 +226,9 @@ There is **no hourly charge** for CloudFront, Lambda (when not invoked), API Gat
 
 ## Recommendations
 
-1. Create an **AWS Budget** at $5 / $20 / $50 thresholds with email alerts.
-2. Enable **Cost Explorer** tags (`Project=minimal_aws_hosting`, `Environment=prod`).
-3. Review **CloudWatch log retention** after Lambda handlers go live.
+1. Confirm the **AWS Budget** alert emails reach `admin_email` (budget is created by prod `tofu apply`).
+2. Enable **Cost Explorer** cost allocation tags (`Project` from your tfvars, `Environment`).
+3. Review **CloudWatch log volume** once the contact form gets real traffic.
 4. Revisit **DynamoDB PITR** if the metadata table stays tiny and backups are not required.
 5. Re-run estimates before launch using [AWS Pricing Calculator](https://calculator.aws/) with your expected page views and photo storage.
 

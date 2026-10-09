@@ -20,7 +20,7 @@ variable "site_bucket" {
   type = object({
     id                       = string
     arn                      = string
-    regional_domain_name       = string
+    regional_domain_name     = string
     origin_access_control_id = string
   })
 }

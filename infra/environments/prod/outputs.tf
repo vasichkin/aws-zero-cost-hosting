@@ -38,7 +38,7 @@ output "bucket_layout" {
 }
 
 output "cloudfront_distribution_id" {
-  description = "CloudFront distribution ID — copy to cloudfront_distribution_id in terraform.tfvars."
+  description = "CloudFront distribution ID (for manual invalidations)."
   value       = try(module.cloudfront.distribution_id, null)
 }
 

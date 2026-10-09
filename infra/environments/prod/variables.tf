@@ -54,12 +54,6 @@ variable "acm_wait_for_validation" {
   default     = false
 }
 
-variable "cloudfront_distribution_id" {
-  description = "CloudFront distribution ID for publish Lambda. Set after first apply from output."
-  type        = string
-  default     = ""
-}
-
 variable "iam_permissions_boundary_arn" {
   description = "Optional permissions boundary ARN applied to all Lambda execution roles."
   type        = string

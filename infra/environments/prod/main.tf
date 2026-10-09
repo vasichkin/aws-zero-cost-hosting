@@ -52,48 +52,6 @@ locals {
   cloudfront_aliases = local.use_custom_domain ? [var.domain_name, local.www_domain] : []
 }
 
-data "aws_caller_identity" "current" {}
-
-data "aws_iam_policy_document" "publish_lambda" {
-  statement {
-    sid    = "DynamoDBAccess"
-    effect = "Allow"
-    actions = [
-      "dynamodb:GetItem",
-      "dynamodb:PutItem",
-      "dynamodb:UpdateItem",
-      "dynamodb:DeleteItem",
-      "dynamodb:Query",
-      "dynamodb:Scan",
-    ]
-    resources = [module.metadata_table.table_arn]
-  }
-
-  statement {
-    sid    = "BucketWrite"
-    effect = "Allow"
-    actions = [
-      "s3:GetObject",
-      "s3:PutObject",
-      "s3:DeleteObject",
-      "s3:ListBucket",
-    ]
-    resources = [
-      module.site_bucket.bucket_arn,
-      "${module.site_bucket.bucket_arn}/*",
-    ]
-  }
-
-  statement {
-    sid    = "CloudFrontInvalidation"
-    effect = "Allow"
-    actions = [
-      "cloudfront:CreateInvalidation",
-    ]
-    resources = ["arn:aws:cloudfront::${data.aws_caller_identity.current.account_id}:distribution/*"]
-  }
-}
-
 data "aws_iam_policy_document" "contact_lambda" {
   statement {
     sid    = "SendEmail"
@@ -164,30 +122,6 @@ module "ses" {
   tags          = local.common_tags
 }
 
-module "lambda_publish" {
-  source = "../../modules/lambda"
-
-  function_name = "${local.name_prefix_safe}-publish"
-  handler       = "handler.handler"
-  source_dir    = "${path.module}/../../../lambda/publish"
-  timeout       = 60
-  memory_size   = 512
-
-  environment_variables = merge({
-    METADATA_TABLE_NAME = module.metadata_table.table_name
-    SITE_BUCKET_NAME    = module.site_bucket.bucket_id
-    PHOTOS_PREFIX       = "photos/"
-    PHOTOS_CDN_URL      = "${local.site_origin}/photos"
-    AWS_REGION_NAME     = var.aws_region
-    }, var.cloudfront_distribution_id != "" ? {
-    CLOUDFRONT_DISTRIBUTION_ID = var.cloudfront_distribution_id
-  } : {})
-
-  policy_json              = data.aws_iam_policy_document.publish_lambda.json
-  permissions_boundary_arn = var.iam_permissions_boundary_arn
-  tags                     = local.common_tags
-}
-
 module "lambda_contact" {
   source = "../../modules/lambda"
 
@@ -221,8 +155,6 @@ module "api" {
   cors_allow_origins             = local.site_origins
   cognito_user_pool_id           = module.cognito.user_pool_id
   cognito_client_id              = module.cognito.admin_client_id
-  publish_lambda_invoke_arn      = module.lambda_publish.invoke_arn
-  publish_lambda_function_name   = module.lambda_publish.function_name
   contact_lambda_invoke_arn      = module.lambda_contact.invoke_arn
   contact_lambda_function_name   = module.lambda_contact.function_name
   enable_contact_route           = true

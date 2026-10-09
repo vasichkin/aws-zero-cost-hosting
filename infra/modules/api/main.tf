@@ -13,6 +13,7 @@ resource "aws_apigatewayv2_api" "this" {
   })
 }
 
+# JWT authorizer kept for the admin API (separate project) to attach routes to.
 resource "aws_apigatewayv2_authorizer" "cognito" {
   api_id           = aws_apigatewayv2_api.this.id
   authorizer_type  = "JWT"
@@ -23,13 +24,6 @@ resource "aws_apigatewayv2_authorizer" "cognito" {
     audience = [var.cognito_client_id]
     issuer   = "https://cognito-idp.${data.aws_region.current.name}.amazonaws.com/${var.cognito_user_pool_id}"
   }
-}
-
-resource "aws_apigatewayv2_integration" "publish" {
-  api_id                 = aws_apigatewayv2_api.this.id
-  integration_type       = "AWS_PROXY"
-  integration_uri        = var.publish_lambda_invoke_arn
-  payload_format_version = "2.0"
 }
 
 resource "aws_apigatewayv2_integration" "contact" {
@@ -47,54 +41,6 @@ resource "aws_apigatewayv2_route" "contact" {
   api_id    = aws_apigatewayv2_api.this.id
   route_key = "POST /contact"
   target    = "integrations/${aws_apigatewayv2_integration.contact[0].id}"
-}
-
-resource "aws_apigatewayv2_route" "admin_content_get" {
-  api_id             = aws_apigatewayv2_api.this.id
-  route_key          = "GET /admin/content"
-  target             = "integrations/${aws_apigatewayv2_integration.publish.id}"
-  authorization_type = "JWT"
-  authorizer_id      = aws_apigatewayv2_authorizer.cognito.id
-}
-
-resource "aws_apigatewayv2_route" "admin_content_post" {
-  api_id             = aws_apigatewayv2_api.this.id
-  route_key          = "POST /admin/content"
-  target             = "integrations/${aws_apigatewayv2_integration.publish.id}"
-  authorization_type = "JWT"
-  authorizer_id      = aws_apigatewayv2_authorizer.cognito.id
-}
-
-resource "aws_apigatewayv2_route" "admin_content_put" {
-  api_id             = aws_apigatewayv2_api.this.id
-  route_key          = "PUT /admin/content"
-  target             = "integrations/${aws_apigatewayv2_integration.publish.id}"
-  authorization_type = "JWT"
-  authorizer_id      = aws_apigatewayv2_authorizer.cognito.id
-}
-
-resource "aws_apigatewayv2_route" "admin_content_delete" {
-  api_id             = aws_apigatewayv2_api.this.id
-  route_key          = "DELETE /admin/content"
-  target             = "integrations/${aws_apigatewayv2_integration.publish.id}"
-  authorization_type = "JWT"
-  authorizer_id      = aws_apigatewayv2_authorizer.cognito.id
-}
-
-resource "aws_apigatewayv2_route" "admin_photos_post" {
-  api_id             = aws_apigatewayv2_api.this.id
-  route_key          = "POST /admin/photos"
-  target             = "integrations/${aws_apigatewayv2_integration.publish.id}"
-  authorization_type = "JWT"
-  authorizer_id      = aws_apigatewayv2_authorizer.cognito.id
-}
-
-resource "aws_apigatewayv2_route" "admin_publish_post" {
-  api_id             = aws_apigatewayv2_api.this.id
-  route_key          = "POST /admin/publish"
-  target             = "integrations/${aws_apigatewayv2_integration.publish.id}"
-  authorization_type = "JWT"
-  authorizer_id      = aws_apigatewayv2_authorizer.cognito.id
 }
 
 resource "aws_apigatewayv2_stage" "default" {
@@ -145,14 +91,6 @@ resource "aws_route53_record" "api" {
     zone_id                = aws_apigatewayv2_domain_name.this[0].domain_name_configuration[0].hosted_zone_id
     evaluate_target_health = false
   }
-}
-
-resource "aws_lambda_permission" "publish" {
-  statement_id  = "AllowAPIGatewayInvokePublish"
-  action        = "lambda:InvokeFunction"
-  function_name = var.publish_lambda_function_name
-  principal     = "apigateway.amazonaws.com"
-  source_arn    = "${aws_apigatewayv2_api.this.execution_arn}/*/*"
 }
 
 resource "aws_lambda_permission" "contact" {

@@ -2,6 +2,8 @@
 
 Mermaid diagrams for the minimal-aws hosting stack.
 
+Regions: code defaults to **eu-west-3**; the current deployment runs in **eu-north-1**. Diagrams say "primary region" for either. ACM is always in **us-east-1**.
+
 ## Runtime architecture
 
 ```mermaid
@@ -17,30 +19,35 @@ flowchart TB
     ACMVal["ACM validation CNAMEs"]
   end
 
-  subgraph AWS["AWS — eu-west-3 (+ us-east-1 for ACM)"]
+  Google["Google reCAPTCHA v3<br/>(external)"]
+
+  subgraph AWS["AWS — primary region (+ us-east-1 for ACM)"]
     subgraph Edge["CloudFront (global edge)"]
       CF["Distribution<br/>aliases: apex + www"]
+      FnIndex["CF function: directory index"]
       FnAPI["CF function: strip /api prefix"]
       FnAdmin["CF function: admin SPA fallback"]
     end
 
-    subgraph Storage["S3 — single bucket"]
+    subgraph Storage["S3 — single bucket (versioned)"]
       S3Root["/ index.html, assets"]
-      S3Admin["/admin/ SPA"]
+      S3Admin["/admin/ SPA (separate project)"]
       S3Photos["/photos/ images"]
     end
 
     subgraph API["HTTP API"]
-      APIGW["API Gateway v2"]
-      LPub["Lambda publish"]
+      APIGW["API Gateway v2<br/>POST /contact (throttled)"]
       LContact["Lambda contact"]
     end
 
-    subgraph Auth["Auth & data"]
-      Cognito["Cognito user pool"]
+    subgraph Auth["Auth & data (reserved for admin project)"]
+      Cognito["Cognito user pool<br/>+ JWT authorizer"]
       DDB["DynamoDB metadata"]
-      SES["SES verified email"]
     end
+
+    SES["SES verified email"]
+    Budget["AWS Budget<br/>$50/month alerts"]
+    Logs["CloudWatch Logs<br/>14-day retention"]
 
     subgraph Cert["us-east-1"]
       ACM["ACM certificate<br/>apex + www SANs"]
@@ -54,9 +61,10 @@ flowchart TB
 
   subgraph Repo["This repo"]
     Website["website/"]
-    AdminUI["admin-ui/ dist"]
     Tofu["OpenTofu apply"]
   end
+
+  AdminUI["Admin UI<br/>(separate project, TBD)"]
 
   User --> Apex
   User --> WWW
@@ -65,35 +73,33 @@ flowchart TB
   WWW --> CF
   ACMVal -.-> ACM
 
-  CF -->|"/"| S3Root
+  CF -->|"/"| FnIndex --> S3Root
   CF -->|"/admin*"| FnAdmin --> S3Admin
   CF -->|"/photos/*"| S3Photos
   CF -->|"/api/*"| FnAPI --> APIGW
 
-  APIGW --> LPub
   APIGW --> LContact
-  LPub --> DDB
-  LPub --> S3Root
-  LPub --> S3Photos
-  LPub --> CF
+  LContact --> Google
   LContact --> SES
-  APIGW --> Cognito
-  Admin --> Cognito
+  LContact --> Logs
+  Admin -.-> Cognito
+  APIGW -.->|"admin routes (future)"| Cognito
 
   ACM --> CF
   Tofu --> Website
   Tofu -->|website_sync| S3Root
-  AdminUI -.->|manual s3 sync| S3Admin
+  AdminUI -.->|s3 sync| S3Admin
   Tofu --> StateS3
   Tofu --> StateLock
+  Tofu --> Budget
 ```
 
 ## Path routing (CloudFront)
 
 ```mermaid
 flowchart LR
-  CF[CloudFront] -->|default /| S3Site["S3 /"]
-  CF -->|/admin*| S3Admin["S3 /admin/"]
+  CF[CloudFront] -->|default /| Idx["directory index"] --> S3Site["S3 /"]
+  CF -->|/admin*| Spa["SPA fallback"] --> S3Admin["S3 /admin/"]
   CF -->|/photos/*| S3Photos["S3 /photos/"]
   CF -->|/api/*| Fn["strip /api"] --> APIGW["API Gateway"]
 ```
@@ -105,22 +111,23 @@ flowchart TD
   Start([Start]) --> Boot
 
   subgraph Phase0["Phase 0 — Bootstrap (once)"]
-    Boot["infra/bootstrap<br/>tofu apply"]
+    Boot["infra/bootstrap<br/>tofu apply (local state)"]
     Boot --> StateOut["Outputs: state bucket + lock table"]
   end
 
   StateOut --> Config
 
   subgraph Phase1["Phase 1 — Configure prod"]
-    Config["Copy terraform.tfvars + backend.hcl"]
-    Init["tofu init -backend-config=backend.hcl"]
-    Config --> Init
+    Config["Copy terraform.tfvars + backend.hcl from *.example"]
+    Secret["export TF_VAR_recaptcha_secret_key"]
+    Init["tofu init -reconfigure -backend-config=backend.hcl"]
+    Config --> Secret --> Init
   end
 
   Init --> ACM1
 
   subgraph Phase2["Phase 2 — ACM cert"]
-    ACM1["tofu apply -target=module.acm<br/>creates cert (apex + www)"]
+    ACM1["tofu apply -target=module.acm.aws_acm_certificate.this<br/>creates cert (apex + www)"]
     DNSVal["Add validation CNAMEs at registrar"]
     ACM1 --> DNSVal
     DNSVal --> WaitVal["Set acm_wait_for_validation = true"]
@@ -133,7 +140,7 @@ flowchart TD
     Full["tofu apply"]
     Full --> CFDeploy["CloudFront ~5–15 min<br/>aliases + ACM attached"]
     Full --> WebsiteUp["website/ → S3 via website_sync"]
-    Full --> Stack["Lambda, API, Cognito, DynamoDB, SES"]
+    Full --> Stack["Contact Lambda, API, Cognito, DynamoDB, SES, Budget"]
   end
 
   CFDeploy --> DNSLive
@@ -148,17 +155,13 @@ flowchart TD
   Test --> Post
 
   subgraph Phase5["Phase 5 — Post-deploy"]
-    Post["Set cloudfront_distribution_id in tfvars"]
-    Post --> LambdaInv["tofu apply -target=module.lambda_publish"]
-    Post --> CognitoUser["Create Cognito admin user"]
-    Post --> AdminSync["Build admin-ui → s3 sync /admin/"]
+    Post["Post-deploy tasks"]
     Post --> SESVerify["Verify SES email"]
+    Post --> CognitoUser["Create Cognito admin user + add to admins group"]
   end
 
-  LambdaInv --> Done([Site live])
+  SESVerify --> Done([Site live])
   CognitoUser --> Done
-  AdminSync --> Done
-  SESVerify --> Done
 ```
 
 ## OpenTofu module dependency graph
@@ -171,31 +174,30 @@ flowchart BT
   DDB[module.metadata_table]
   Cognito[module.cognito]
   SES[module.ses]
-  LPub[module.lambda_publish]
   LContact[module.lambda_contact]
   API[module.api]
   CF[module.cloudfront]
+  Budget[aws_budgets_budget.monthly_cost]
 
   Bucket --> Sync
-  Bucket --> LPub
-  DDB --> LPub
   SES --> LContact
   Cognito --> API
-  LPub --> API
   LContact --> API
   API --> CF
   Bucket --> CF
   ACM --> CF
 ```
 
+`module.metadata_table` and `aws_budgets_budget.monthly_cost` have no dependencies on other modules. `module.cloudfront` also has an explicit `depends_on = [module.api]`.
+
 ## Regions
 
 ```mermaid
 flowchart LR
-  subgraph eu-west-3["eu-west-3 (primary)"]
+  subgraph primary["Primary region (eu-west-3 default, eu-north-1 deployed)"]
     S3[S3 site bucket]
     DDB[DynamoDB]
-    Lambda[Lambda functions]
+    Lambda[Lambda contact]
     APIGW[API Gateway]
     Cognito[Cognito]
     SES[SES]
@@ -208,6 +210,7 @@ flowchart LR
 
   subgraph Global["Global"]
     CF[CloudFront]
+    Budget[AWS Budgets]
   end
 
   ACM --> CF

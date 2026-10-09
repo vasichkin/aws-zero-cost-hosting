@@ -1,0 +1,9 @@
+# Copy to backend.hcl (gitignored) and adjust after bootstrap.
+# Values must match bootstrap outputs: state_bucket_name, lock_table_name, aws_region.
+#
+#   cp backend.hcl.example backend.hcl
+#   tofu init -reconfigure -backend-config=backend.hcl
+
+bucket         = "YOUR_PROJECT-tofu-state"
+region         = "eu-west-3"
+dynamodb_table = "YOUR_PROJECT-tofu-lock"

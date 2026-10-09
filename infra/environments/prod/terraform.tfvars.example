@@ -9,8 +9,6 @@ recaptcha_secret_key = "CHANGE_ME"
 
 acm_wait_for_validation = false   # set true after registrar ACM CNAMEs propagate
 
-cloudfront_distribution_id = ""   # set from: tofu output -raw cloudfront_distribution_id
-
 # Required if your org enforces IAM permissions boundaries on Lambda roles.
 iam_permissions_boundary_arn = "arn:aws:iam::ACCOUNT_ID:policy/YourBoundaryPolicy"
 

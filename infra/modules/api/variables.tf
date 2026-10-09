@@ -42,16 +42,6 @@ variable "cognito_client_id" {
   type        = string
 }
 
-variable "publish_lambda_invoke_arn" {
-  description = "Invoke ARN of the publish Lambda."
-  type        = string
-}
-
-variable "publish_lambda_function_name" {
-  description = "Function name of the publish Lambda."
-  type        = string
-}
-
 variable "contact_lambda_invoke_arn" {
   description = "Invoke ARN of the contact Lambda."
   type        = string
