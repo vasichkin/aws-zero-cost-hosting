@@ -1,11 +1,11 @@
 output "certificate_arn" {
   description = "ACM certificate ARN (validated when wait_for_validation is true)."
-  value       = local.wait_for_validation ? aws_acm_certificate_validation.this[0].certificate_arn : aws_acm_certificate.this.arn
+  value       = var.wait_for_validation ? aws_acm_certificate_validation.this[0].certificate_arn : aws_acm_certificate.this.arn
 }
 
 output "certificate_status" {
   description = "Whether the certificate has completed DNS validation."
-  value       = local.wait_for_validation ? "validated" : "pending_validation"
+  value       = var.wait_for_validation ? "validated" : "pending_validation"
 }
 
 output "dns_validation_records" {

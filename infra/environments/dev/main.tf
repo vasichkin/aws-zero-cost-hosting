@@ -72,7 +72,6 @@ module "api" {
   source = "../../modules/api"
 
   api_name             = "${local.name_prefix}-api"
-  enable_custom_domain = false
   enable_contact_route = false
   cors_allow_origins   = [local.admin_origin]
   cognito_user_pool_id = module.cognito.user_pool_id

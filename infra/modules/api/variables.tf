@@ -3,30 +3,6 @@ variable "api_name" {
   type        = string
 }
 
-variable "enable_custom_domain" {
-  description = "Whether to attach a custom domain to the API."
-  type        = bool
-  default     = true
-}
-
-variable "domain_name" {
-  description = "Custom domain for the API (e.g. api.example.com)."
-  type        = string
-  default     = ""
-}
-
-variable "route53_zone_id" {
-  description = "Route53 hosted zone ID for the API domain record. Leave empty for external DNS."
-  type        = string
-  default     = ""
-}
-
-variable "acm_certificate_arn" {
-  description = "Regional ACM certificate ARN for the API custom domain."
-  type        = string
-  default     = ""
-}
-
 variable "cors_allow_origins" {
   description = "Allowed CORS origins."
   type        = list(string)

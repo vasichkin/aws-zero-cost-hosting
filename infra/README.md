@@ -279,5 +279,3 @@ Committed defaults (`project_name`, `aws_region`) are intentional; override in `
 | `cognito` | Admin user pool, SPA client, `admins` group |
 | `dynamodb` | Metadata table (on-demand, PK/SK, optional PITR) for the admin project |
 | `ses-email` | Single verified email |
-
-Legacy unused: `cloudfront/`, `dns/`, `ses/` (superseded by `cloudfront-app`, external DNS, `ses-email`). The `acm` and `api` modules also keep unused Route 53 / custom-domain branches (`route53_zone_id`, `enable_custom_domain`, which defaults to `true` in `api` but both environments pass `false`).

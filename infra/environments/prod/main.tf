@@ -151,7 +151,6 @@ module "api" {
   source = "../../modules/api"
 
   api_name                       = "${local.name_prefix}-api"
-  enable_custom_domain           = false
   cors_allow_origins             = local.site_origins
   cognito_user_pool_id           = module.cognito.user_pool_id
   cognito_client_id              = module.cognito.admin_client_id
