@@ -27,9 +27,20 @@ variable "ses_email" {
 }
 
 variable "recaptcha_secret_key" {
-  description = "Google reCAPTCHA v2 secret used only by the contact Lambda."
+  description = "Google reCAPTCHA v3 secret used only by the contact Lambda."
   type        = string
   sensitive   = true
+}
+
+variable "recaptcha_min_score" {
+  description = "Minimum accepted Google reCAPTCHA v3 score for contact submissions."
+  type        = number
+  default     = 0.5
+
+  validation {
+    condition     = var.recaptcha_min_score >= 0 && var.recaptcha_min_score <= 1
+    error_message = "recaptcha_min_score must be between 0 and 1."
+  }
 }
 
 variable "admin_email" {

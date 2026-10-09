@@ -16,6 +16,7 @@ import urllib.request
 MAX_BODY_BYTES = 20_000
 EMAIL_PATTERN = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
 SUPPORTED_LOCALES = {"pl", "en", "uk"}
+RECAPTCHA_ACTION = "contact"
 
 
 def _configured_values(name: str) -> set[str]:
@@ -97,7 +98,12 @@ def _validate(payload: dict) -> dict:
 def _verify_recaptcha(token: str, remote_ip: str) -> tuple[bool, str]:
     secret = os.getenv("RECAPTCHA_SECRET_KEY", "").strip()
     expected_hosts = {host.lower().rstrip(".") for host in _configured_values("RECAPTCHA_EXPECTED_HOSTNAMES")}
-    if not secret or not expected_hosts:
+    try:
+        minimum_score = float(os.getenv("RECAPTCHA_MIN_SCORE", "0.5"))
+    except ValueError:
+        return False, "configuration"
+    expected_action = os.getenv("RECAPTCHA_EXPECTED_ACTION", RECAPTCHA_ACTION).strip()
+    if not secret or not expected_hosts or not expected_action or not 0 <= minimum_score <= 1:
         return False, "configuration"
 
     fields = {"secret": secret, "response": token}
@@ -116,7 +122,12 @@ def _verify_recaptcha(token: str, remote_ip: str) -> tuple[bool, str]:
         return False, "unavailable"
 
     hostname = str(result.get("hostname", "")).lower().rstrip(".")
-    if result.get("success") is True and hostname in expected_hosts:
+    action = str(result.get("action", ""))
+    try:
+        score = float(result.get("score", -1))
+    except (TypeError, ValueError):
+        score = -1
+    if result.get("success") is True and hostname in expected_hosts and action == expected_action and score >= minimum_score:
         return True, "ok"
     return False, "invalid"
 

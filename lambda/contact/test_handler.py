@@ -12,6 +12,8 @@ class ContactHandlerTests(unittest.TestCase):
             "ALLOWED_ORIGINS": "https://buhaj.eu,https://www.buhaj.eu",
             "RECAPTCHA_SECRET_KEY": "secret",
             "RECAPTCHA_EXPECTED_HOSTNAMES": "buhaj.eu,www.buhaj.eu",
+            "RECAPTCHA_EXPECTED_ACTION": "contact",
+            "RECAPTCHA_MIN_SCORE": "0.5",
             "SES_FROM_EMAIL": "contact@buhaj.eu",
             "SES_TO_EMAIL": "contact@buhaj.eu",
             "AWS_REGION_NAME": "eu-west-3",
@@ -85,6 +87,21 @@ class ContactHandlerTests(unittest.TestCase):
 
         with mock.patch("urllib.request.urlopen", return_value=Response()):
             self.assertEqual(handler._verify_recaptcha("token", ""), (False, "invalid"))
+
+    def test_recaptcha_v3_action_and_score_must_match(self):
+        class Response:
+            def __init__(self, body): self.body = body
+            def __enter__(self): return self
+            def __exit__(self, *args): return False
+            def read(self, limit): return json.dumps(self.body).encode("utf-8")
+
+        valid = {"success": True, "hostname": "buhaj.eu", "action": "contact", "score": 0.8}
+        with mock.patch("urllib.request.urlopen", return_value=Response(valid)):
+            self.assertEqual(handler._verify_recaptcha("token", ""), (True, "ok"))
+
+        for invalid in ({**valid, "action": "login"}, {**valid, "score": 0.2}):
+            with self.subTest(invalid=invalid), mock.patch("urllib.request.urlopen", return_value=Response(invalid)):
+                self.assertEqual(handler._verify_recaptcha("token", ""), (False, "invalid"))
 
 
 if __name__ == "__main__":

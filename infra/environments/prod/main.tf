@@ -204,6 +204,8 @@ module "lambda_contact" {
     ALLOWED_ORIGINS              = join(",", local.site_origins)
     RECAPTCHA_SECRET_KEY         = var.recaptcha_secret_key
     RECAPTCHA_EXPECTED_HOSTNAMES = join(",", [var.domain_name, local.www_domain])
+    RECAPTCHA_EXPECTED_ACTION    = "contact"
+    RECAPTCHA_MIN_SCORE          = tostring(var.recaptcha_min_score)
   }
 
   policy_json              = data.aws_iam_policy_document.contact_lambda.json
