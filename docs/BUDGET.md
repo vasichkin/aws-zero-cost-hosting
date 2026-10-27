@@ -1,7 +1,6 @@
 # Cost of ownership (TCO)
 
-Estimated running costs for the **minimal-aws** stack: static site + contact API on CloudFront, S3, Lambda, API Gateway, SES. The admin panel is TBD and not costed here.
-
+Estimated running costs for the **minimal-aws** stack: static site + contact API on CloudFront, S3, Lambda, API Gateway, SES.
 **Region:** code defaults to **eu-west-3** (Paris); the current deployment runs in **eu-north-1** (Stockholm). Prices below are close for both, but re-check for eu-north-1. ACM cert in **us-east-1** (required by CloudFront, no extra cert charge).
 
 Prices are **approximate USD**, pay-as-you-go. Verify on the [AWS Pricing Calculator](https://calculator.aws/) and [AWS Free Tier](https://aws.amazon.com/free/) — AWS updates rates and free-tier rules periodically.
@@ -214,6 +213,6 @@ There is **no hourly charge** for CloudFront, Lambda (when not invoked), or API 
 
 ## Related docs
 
-- [DEPLOYMENT.md](DEPLOYMENT.md) — architecture diagrams
+- [DEPLOYMENT.md](DEPLOYMENT.md) — request routing diagram, regions
 - [CONTEXT.md](CONTEXT.md) — design decisions
 - [../infra/README.md](../infra/README.md) — deploy runbook

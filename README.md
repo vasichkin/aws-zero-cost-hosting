@@ -6,7 +6,35 @@ Minimal-TCO static site on AWS: one S3 bucket, one CloudFront distribution, path
 
 The public website in `website/` is synced to S3 by `tofu apply`.
 
-**Admin panel: TBD.** There is no admin UI, admin API, authentication or content database in this stack yet. How the admin panel will be built and hosted is still to be decided.
+## Architecture
+
+```mermaid
+flowchart LR
+  Visitor([Visitor browser])
+  Owner([Site owner mailbox])
+  DNS["Registrar DNS<br/>(external)"]
+  Google["Google reCAPTCHA v3<br/>(external)"]
+
+  subgraph AWS["AWS stack (OpenTofu)"]
+    Stack["CloudFront + S3 site<br/>API Gateway + Lambda contact"]
+    SES["SES"]
+  end
+
+  Visitor -->|"HTTPS apex / www"| DNS --> Stack
+  Visitor -.->|"reCAPTCHA token"| Google
+  Stack -->|"verify token"| Google
+  Stack --> SES -->|"contact email"| Owner
+```
+
+- **One CloudFront distribution** is the single public entry point. Visitors reach it through the registrar's DNS (apex and `www`), and path routing sends each request to the right origin.
+- **Static site:** `/` and `/photos/*` are served from one private, versioned S3 bucket through an origin access control. `website/` is synced to it on `tofu apply`.
+- **Contact API:** `/api/*` goes to API Gateway and the `lambda/contact` function. It validates the request, checks the reCAPTCHA v3 token with Google, and sends the message through SES to the owner.
+
+More diagrams:
+
+- Request routing and regions: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
+- Deploy sequence and module dependencies: [infra/README.md](infra/README.md)
+- Contact handler request flow: [lambda/contact/README.md](lambda/contact/README.md)
 
 ## Layout
 
@@ -14,7 +42,7 @@ The public website in `website/` is synced to S3 by `tofu apply`.
 infra/           OpenTofu — bootstrap, modules, dev/prod environments
 lambda/contact/  Contact form handler (validation, reCAPTCHA v3, SES) + unit tests
 website/         Static public site (synced to S3 on tofu apply)
-docs/            Project context, diagrams, budget
+docs/            Project context, architecture diagrams, budget
 ```
 
 ## Quick start
@@ -42,7 +70,7 @@ docs/            Project context, diagrams, budget
 
 3. **Upload site content** — automatic on `tofu apply` from `website/`; or manual `aws s3 sync` if preferred.
 
-4. **Full deployment guide** — see [infra/README.md](infra/README.md) (ACM, DNS, SES).
+4. **Full deployment guide** — see [infra/README.md](infra/README.md) (deploy sequence diagram, ACM, DNS, SES).
 
 ## Environments
 
@@ -70,6 +98,6 @@ Never commit account IDs, emails, domains, ARNs or the reCAPTCHA secret — use 
 
 See [docs/CONTEXT.md](docs/CONTEXT.md) for architecture and operational notes.
 
-See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for mermaid deployment diagrams.
+See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for the request flow diagram and regions.
 
-See [docs/budget.md](docs/budget.md) for cost of ownership and free tier estimates.
+See [docs/BUDGET.md](docs/BUDGET.md) for cost of ownership and free tier estimates.

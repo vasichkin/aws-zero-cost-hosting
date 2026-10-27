@@ -42,6 +42,27 @@ tofu output -raw lock_table_name      # e.g. minimal-aws-tofu-lock
 
 ## Prod deploy sequence
 
+```mermaid
+flowchart TD
+  Boot["Bootstrap<br/>infra/bootstrap, local state<br/>creates state bucket + lock table"]
+  Cfg["Configure prod<br/>terraform.tfvars + backend.hcl<br/>tofu init -reconfigure"]
+  Cert["ACM certificate<br/>tofu apply -target=module.acm<br/>(us-east-1)"]
+  Val["Add validation CNAMEs<br/>at registrar"]
+  Issued["acm_wait_for_validation = true<br/>tofu apply -target=module.acm<br/>certificate ISSUED"]
+  Full["Full stack<br/>tofu apply"]
+  Wait["CloudFront deploy<br/>~5-15 min"]
+  Live["DNS cutover<br/>www CNAME to *.cloudfront.net"]
+  Test["Verify<br/>curl https://www.domain/<br/>submit contact form"]
+
+  Boot --> Cfg --> Cert --> Val --> Issued --> Full --> Wait --> Live --> Test
+```
+
+Notes:
+
+- `tofu apply` also syncs `website/` to S3 (`module.website_sync`), so content goes live with the full stack apply.
+- The SES sender address must be verified through the confirmation email before the contact form can send.
+- If the registrar blocks a CNAME on the apex, redirect the apex to `www`.
+
 ### 0. Configure
 
 ```bash
@@ -169,17 +190,13 @@ Do **not** point `www` → apex if apex has no records (creates a dead loop).
 
 Verify the inbox for the SES verification email (`tofu output ses_verification_note`). The contact Lambda sends from and to `ses_email`. While the account is in the SES sandbox it can only send to verified addresses, which is enough here because sender and recipient are the same verified address.
 
-### Admin panel
-
-TBD. No admin UI, admin API, authentication or content store is provisioned by this stack yet.
-
 ## API routes
 
 | CloudFront path | API Gateway route | Auth | Target |
 |---|---|---|---|
 | `POST /api/contact` | `POST /contact` | none; throttled burst 10 / 5 rps; reCAPTCHA v3 + honeypot in handler | `lambda/contact` (prod only) |
 
-Request/response contract: see [Contact API](../README.md#contact-api).
+Request/response contract: see [lambda/contact/README.md](../lambda/contact/README.md).
 
 ## Cost alerts
 
@@ -252,3 +269,25 @@ Committed defaults (`project_name`, `aws_region`) are intentional; override in `
 | `lambda` | Generic Python 3.12 ARM64 function + IAM role + log group (14-day retention); used for the contact handler |
 | `api` | HTTP API, `POST /contact` with throttling (no custom domain — reached via CloudFront) |
 | `ses-email` | Single verified email |
+
+### Dependencies
+
+```mermaid
+flowchart BT
+  ACM[module.acm]
+  Bucket[module.site_bucket]
+  Sync[module.website_sync]
+  SES[module.ses]
+  LContact[module.lambda_contact]
+  API[module.api]
+  CF[module.cloudfront]
+
+  Bucket --> Sync
+  SES -->|"IAM policy: ses:SendEmail"| LContact
+  LContact --> API
+  API --> CF
+  Bucket --> CF
+  ACM --> CF
+```
+
+`aws_budgets_budget.monthly_cost` ($50/month, alerts at ~$5 / $20 / $50) stands alone. `module.cloudfront` also has an explicit `depends_on = [module.api]`.
