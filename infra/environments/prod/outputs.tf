@@ -8,11 +8,6 @@ output "site_url" {
   value       = "https://${var.domain_name}/"
 }
 
-output "admin_url" {
-  description = "Admin panel URL."
-  value       = "https://${var.domain_name}/admin/"
-}
-
 output "photos_url" {
   description = "Photos CDN base URL."
   value       = "https://${var.domain_name}/photos/"
@@ -24,7 +19,7 @@ output "api_url" {
 }
 
 output "site_bucket_name" {
-  description = "S3 bucket for all static content (site, admin, photos prefixes)."
+  description = "S3 bucket for all static content (site and photos prefixes)."
   value       = module.site_bucket.bucket_id
 }
 
@@ -32,7 +27,6 @@ output "bucket_layout" {
   description = "S3 key prefix layout inside the single bucket."
   value = {
     site   = "/"
-    admin  = "admin/"
     photos = "photos/"
   }
 }
@@ -45,21 +39,6 @@ output "cloudfront_distribution_id" {
 output "cloudfront_domain_name" {
   description = "CloudFront domain for registrar CNAME (available after cloudfront module is applied)."
   value       = try(module.cloudfront.domain_name, null)
-}
-
-output "cognito_user_pool_id" {
-  description = "Cognito user pool ID."
-  value       = try(module.cognito.user_pool_id, null)
-}
-
-output "cognito_admin_client_id" {
-  description = "Cognito app client ID for admin SPA."
-  value       = try(module.cognito.admin_client_id, null)
-}
-
-output "admin_email" {
-  description = "Email for the Cognito admin account (create manually after apply)."
-  value       = var.admin_email
 }
 
 output "ses_verification_note" {

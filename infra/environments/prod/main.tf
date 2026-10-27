@@ -78,10 +78,8 @@ module "acm" {
 module "site_bucket" {
   source = "../../modules/s3-bucket"
 
-  bucket_name          = "${local.name_prefix}-site"
-  enable_cors          = true
-  cors_allowed_origins = local.site_origins
-  tags                 = local.common_tags
+  bucket_name = "${local.name_prefix}-site"
+  tags        = local.common_tags
 }
 
 module "website_sync" {
@@ -90,29 +88,6 @@ module "website_sync" {
   bucket_id  = module.site_bucket.bucket_id
   source_dir = "${path.module}/../../../website"
   tags       = local.common_tags
-}
-
-module "metadata_table" {
-  source = "../../modules/dynamodb"
-
-  table_name                    = "${local.name_prefix}-metadata"
-  enable_point_in_time_recovery = var.enable_dynamodb_pitr
-  tags                          = local.common_tags
-}
-
-module "cognito" {
-  source = "../../modules/cognito"
-
-  user_pool_name = "${local.name_prefix}-admins"
-  admin_callback_urls = [
-    "${local.site_origin}/admin/callback",
-    "${local.www_origin}/admin/callback",
-  ]
-  admin_logout_urls = [
-    "${local.site_origin}/admin",
-    "${local.www_origin}/admin",
-  ]
-  tags = local.common_tags
 }
 
 module "ses" {
@@ -152,8 +127,6 @@ module "api" {
 
   api_name                       = "${local.name_prefix}-api"
   cors_allow_origins             = local.site_origins
-  cognito_user_pool_id           = module.cognito.user_pool_id
-  cognito_client_id              = module.cognito.admin_client_id
   contact_lambda_invoke_arn      = module.lambda_contact.invoke_arn
   contact_lambda_function_name   = module.lambda_contact.function_name
   enable_contact_route           = true

@@ -31,16 +31,13 @@ locals {
     Environment = var.environment
     ManagedBy   = "opentofu"
   })
-  admin_origin = "http://localhost:5173"
 }
 
 module "site_bucket" {
   source = "../../modules/s3-bucket"
 
-  bucket_name          = "${local.name_prefix}-site"
-  enable_cors          = true
-  cors_allowed_origins = [local.admin_origin]
-  tags                 = local.common_tags
+  bucket_name = "${local.name_prefix}-site"
+  tags        = local.common_tags
 }
 
 module "website_sync" {
@@ -51,31 +48,11 @@ module "website_sync" {
   tags       = local.common_tags
 }
 
-module "metadata_table" {
-  source = "../../modules/dynamodb"
-
-  table_name                    = "${local.name_prefix}-metadata"
-  enable_point_in_time_recovery = false
-  tags                          = local.common_tags
-}
-
-module "cognito" {
-  source = "../../modules/cognito"
-
-  user_pool_name      = "${local.name_prefix}-admins"
-  admin_callback_urls = ["http://localhost:5173/admin/callback"]
-  admin_logout_urls   = ["http://localhost:5173/admin"]
-  tags                = local.common_tags
-}
-
 module "api" {
   source = "../../modules/api"
 
   api_name             = "${local.name_prefix}-api"
   enable_contact_route = false
-  cors_allow_origins   = [local.admin_origin]
-  cognito_user_pool_id = module.cognito.user_pool_id
-  cognito_client_id    = module.cognito.admin_client_id
   tags                 = local.common_tags
 }
 
