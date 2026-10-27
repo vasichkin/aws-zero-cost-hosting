@@ -16,7 +16,7 @@ variable "acm_certificate_arn" {
 }
 
 variable "site_bucket" {
-  description = "S3 bucket for all static content (/ , /admin/ , /photos/ prefixes)."
+  description = "S3 bucket for all static content (/ and /photos/ prefixes)."
   type = object({
     id                       = string
     arn                      = string

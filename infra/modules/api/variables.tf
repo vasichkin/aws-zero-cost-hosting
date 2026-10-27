@@ -4,18 +4,9 @@ variable "api_name" {
 }
 
 variable "cors_allow_origins" {
-  description = "Allowed CORS origins."
+  description = "Allowed CORS origins. Empty disables CORS."
   type        = list(string)
-}
-
-variable "cognito_user_pool_id" {
-  description = "Cognito user pool ID for JWT issuer."
-  type        = string
-}
-
-variable "cognito_client_id" {
-  description = "Cognito app client ID for JWT audience validation."
-  type        = string
+  default     = []
 }
 
 variable "contact_lambda_invoke_arn" {

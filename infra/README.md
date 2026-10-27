@@ -5,8 +5,7 @@ One custom domain, one CloudFront distribution, one S3 bucket with prefixes:
 | Path | Origin |
 |---|---|
 | `/` (default) | S3 site root — CloudFront function rewrites `/about/` and `/about` to `/about/index.html` |
-| `/admin*` | S3 `admin/` (SPA fallback to `/admin/index.html`) |
-| `/photos/*` | S3 `photos/` (cached up to 1 year) |
+| `/photos/*` | S3 `photos/` (cached 1 day by default, up to 1 year) |
 | `/api/*` | API Gateway (CloudFront function strips `/api` prefix, no caching) |
 
 Missing objects are served as **404** with `/404.html` (CloudFront rewrites S3's 403 to 404). `website/` has no `404.html` yet, so CloudFront cannot fetch the error page and returns a bare error; add one.
@@ -51,13 +50,15 @@ cp terraform.tfvars.example terraform.tfvars
 cp backend.hcl.example backend.hcl
 ```
 
-Edit `terraform.tfvars`: domain, `ses_email`, `admin_email`, IAM boundary, tags. Optional: `recaptcha_min_score` (default 0.5), `enable_dynamodb_pitr` (default true).
+Edit `terraform.tfvars`: domain, `ses_email`, `admin_email`, `recaptcha_secret_key`, IAM boundary, tags. Optional: `recaptcha_min_score` (default 0.5).
 
-Provide the reCAPTCHA secret (required, sensitive) without writing it to the file:
+`recaptcha_secret_key` is required and sensitive. Either replace `CHANGE_ME` in `terraform.tfvars` (the file is gitignored), or delete that line and export it instead:
 
 ```bash
 export TF_VAR_recaptcha_secret_key="<google-recaptcha-v3-secret>"
 ```
+
+A value in `terraform.tfvars` overrides `TF_VAR_*`, so if you keep the `CHANGE_ME` line the environment variable is ignored and every contact submission fails reCAPTCHA.
 
 Edit `backend.hcl` with bucket, table and region from bootstrap outputs.
 
@@ -164,37 +165,13 @@ Do **not** point `www` → apex if apex has no records (creates a dead loop).
 
 ## Post-deploy
 
-### Cognito admin user
-
-The pool and an `admins` group are created for the admin project (separate, TBD). Nothing in this stack checks group membership yet.
-
-```bash
-POOL=$(tofu output -raw cognito_user_pool_id)
-aws cognito-idp admin-create-user \
-  --user-pool-id "$POOL" \
-  --username "<admin-email>" \
-  --user-attributes Name=email,Value=<admin-email> Name=email_verified,Value=true \
-  --message-action SUPPRESS
-aws cognito-idp admin-set-user-password \
-  --user-pool-id "$POOL" \
-  --username "<admin-email>" \
-  --password "<temp-password>" \
-  --permanent
-aws cognito-idp admin-add-user-to-group \
-  --user-pool-id "$POOL" \
-  --username "<admin-email>" \
-  --group-name admins
-```
-
-Cognito callback URLs (configured in Terraform): `https://<domain>/admin/callback` and `https://www.<domain>/admin/callback`; logout `https://<domain>/admin` and `https://www.<domain>/admin`.
-
 ### SES
 
 Verify the inbox for the SES verification email (`tofu output ses_verification_note`). The contact Lambda sends from and to `ses_email`. While the account is in the SES sandbox it can only send to verified addresses, which is enough here because sender and recipient are the same verified address.
 
-### Admin UI
+### Admin panel
 
-Separate project (TBD). It is expected to build with Vite `base: '/admin/'` and sync to `s3://<site_bucket>/admin/`. Admin API routes should attach to this stack's HTTP API using the Cognito JWT authorizer (`module.api` output `authorizer_id`).
+TBD. No admin UI, admin API, authentication or content store is provisioned by this stack yet.
 
 ## API routes
 
@@ -221,21 +198,19 @@ make fmt validate
 
 `make prod-init` runs `tofu init -backend-config=backend.hcl` without `-reconfigure`; add it manually when switching backends.
 
-`dev` provisions its own CloudFront distribution, Cognito pool, DynamoDB table (PITR off), S3 bucket and HTTP API (no contact route, no SES, no budget; CORS for `http://localhost:5173`) alongside `prod`. These are usage-based and cost ~$0 idle, but run `make dev-destroy` when you're done with a session to avoid leaving duplicate baseline resources around.
+`dev` provisions its own CloudFront distribution, S3 bucket and HTTP API (no contact route, no SES, no budget) alongside `prod`. These are usage-based and cost ~$0 idle, but run `make dev-destroy` when you're done with a session to avoid leaving duplicate baseline resources around.
 
 ## Outputs
 
 | Output | Use |
 |---|---|
 | `site_url`, `www_url` | Public site URLs (apex / `www`) |
-| `admin_url`, `photos_url`, `api_url` | Path-routed URLs on the domain |
+| `photos_url`, `api_url` | Path-routed URLs on the domain |
 | `cloudfront_domain_name` | Registrar CNAME / ALIAS target |
 | `cloudfront_distribution_id` | Manual invalidations (`aws cloudfront create-invalidation`) |
 | `site_bucket_name` | `aws s3 sync` target |
-| `bucket_layout` | S3 prefixes (`/`, `admin/`, `photos/`) |
+| `bucket_layout` | S3 prefixes (`/`, `photos/`) |
 | `acm_dns_validation_records` | Phase A DNS |
-| `cognito_user_pool_id`, `cognito_admin_client_id` | Admin SPA env |
-| `admin_email` | Address for the Cognito admin user and budget alerts |
 | `ses_verification_note` | SES verification reminder |
 | `dns_records_manual` | Combined DNS helper |
 
@@ -249,7 +224,8 @@ make fmt validate
 | `dig` empty after apex CNAME | Registrar rejected CNAME (MX conflict) | Use ALIAS or contact registrar |
 | Site works on `*.cloudfront.net` but not custom domain | Alias not attached | `acm_wait_for_validation = true` + re-apply |
 | `www` resolves to nothing | `www` CNAME → apex with empty apex | Point `www` → CloudFront directly |
-| `tofu plan` prompts for `recaptcha_secret_key` | Required variable not set | `export TF_VAR_recaptcha_secret_key=...` |
+| `tofu plan` prompts for `recaptcha_secret_key` | Required variable not set | Set it in `terraform.tfvars` or `export TF_VAR_recaptcha_secret_key=...` |
+| Contact form returns 403 `CAPTCHA_FAILED` for everyone | Secret still `CHANGE_ME` (tfvars overrides `TF_VAR_*`), or site key / hostname mismatch | Fix `recaptcha_secret_key` in `terraform.tfvars` and re-apply |
 | Contact form returns 500 `CONFIGURATION_ERROR` | reCAPTCHA secret/hostnames or `ALLOWED_ORIGINS` empty | Check the Lambda environment set by `module.lambda_contact` |
 
 ## Configuration reference (no hardcoded secrets in repo)
@@ -257,9 +233,8 @@ make fmt validate
 | Setting | Where |
 |---|---|
 | `domain_name`, `ses_email`, `admin_email`, tags | `terraform.tfvars` (gitignored) |
-| `recaptcha_secret_key` (required, sensitive) | `TF_VAR_recaptcha_secret_key` env var (or `terraform.tfvars`) |
+| `recaptcha_secret_key` (required, sensitive) | `terraform.tfvars` (gitignored), or `TF_VAR_recaptcha_secret_key` with the tfvars line removed |
 | `recaptcha_min_score` | `terraform.tfvars` — default 0.5 |
-| `enable_dynamodb_pitr` | `terraform.tfvars` — default true |
 | State backend bucket/table/region | `backend.hcl` (gitignored; template `backend.hcl.example`) |
 | IAM permissions boundary | `terraform.tfvars` |
 | `acm_wait_for_validation` | `terraform.tfvars` — controls CloudFront alias + cert |
@@ -271,11 +246,9 @@ Committed defaults (`project_name`, `aws_region`) are intentional; override in `
 | Module | Purpose |
 |---|---|
 | `acm` | us-east-1 cert (apex + `www`), optional validation wait |
-| `cloudfront-app` | Unified distribution, OAC bucket policy, 3 CF functions (directory index, admin SPA fallback, API prefix strip), 403/404 → `/404.html` |
-| `s3-bucket` | Single bucket + OAC, SSE-S3, versioning with 30-day noncurrent-version expiry, optional CORS |
+| `cloudfront-app` | Unified distribution, OAC bucket policy, 2 CF functions (directory index, API prefix strip), 403/404 → `/404.html` |
+| `s3-bucket` | Single bucket + OAC, SSE-S3, versioning with 30-day noncurrent-version expiry |
 | `s3-static-sync` | Uploads `website/` to the bucket on apply (content types, `Cache-Control: public, max-age=3600`) |
 | `lambda` | Generic Python 3.12 ARM64 function + IAM role + log group (14-day retention); used for the contact handler |
-| `api` | HTTP API, Cognito JWT authorizer, `POST /contact` with throttling (no custom domain — reached via CloudFront) |
-| `cognito` | Admin user pool, SPA client, `admins` group |
-| `dynamodb` | Metadata table (on-demand, PK/SK, optional PITR) for the admin project |
+| `api` | HTTP API, `POST /contact` with throttling (no custom domain — reached via CloudFront) |
 | `ses-email` | Single verified email |

@@ -2,28 +2,19 @@ resource "aws_apigatewayv2_api" "this" {
   name          = var.api_name
   protocol_type = "HTTP"
 
-  cors_configuration {
-    allow_headers = ["authorization", "content-type"]
-    allow_methods = ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
-    allow_origins = var.cors_allow_origins
+  dynamic "cors_configuration" {
+    for_each = length(var.cors_allow_origins) > 0 ? [1] : []
+
+    content {
+      allow_headers = ["content-type"]
+      allow_methods = ["POST", "OPTIONS"]
+      allow_origins = var.cors_allow_origins
+    }
   }
 
   tags = merge(var.tags, {
     Name = var.api_name
   })
-}
-
-# JWT authorizer kept for the admin API (separate project) to attach routes to.
-resource "aws_apigatewayv2_authorizer" "cognito" {
-  api_id           = aws_apigatewayv2_api.this.id
-  authorizer_type  = "JWT"
-  identity_sources = ["$request.header.Authorization"]
-  name             = "cognito-jwt"
-
-  jwt_configuration {
-    audience = [var.cognito_client_id]
-    issuer   = "https://cognito-idp.${data.aws_region.current.name}.amazonaws.com/${var.cognito_user_pool_id}"
-  }
 }
 
 resource "aws_apigatewayv2_integration" "contact" {
@@ -66,5 +57,3 @@ resource "aws_lambda_permission" "contact" {
   principal     = "apigateway.amazonaws.com"
   source_arn    = "${aws_apigatewayv2_api.this.execution_arn}/*/*"
 }
-
-data "aws_region" "current" {}

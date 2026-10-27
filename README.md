@@ -2,9 +2,11 @@
 
 ### This project is about creating hosting with zero cost on AWS infrastructure.
 
-Minimal-TCO static site on AWS: one S3 bucket, one CloudFront distribution, path-based routing, a Lambda-backed contact form (reCAPTCHA v3 + SES), Cognito and DynamoDB reserved for the admin side, and AWS Budgets cost alerts.
+Minimal-TCO static site on AWS: one S3 bucket, one CloudFront distribution, path-based routing, a Lambda-backed contact form (reCAPTCHA v3 + SES), and AWS Budgets cost alerts.
 
-The public website in `website/` is synced to S3 by `tofu apply`. The admin UI and its API handlers are a separate project (TBD) and deploy independently of this repo.
+The public website in `website/` is synced to S3 by `tofu apply`.
+
+**Admin panel: TBD.** There is no admin UI, admin API, authentication or content database in this stack yet. How the admin panel will be built and hosted is still to be decided.
 
 ## Layout
 
@@ -32,16 +34,15 @@ docs/            Project context, diagrams, budget
 
    ```bash
    cd infra/environments/prod
-   cp terraform.tfvars.example terraform.tfvars   # edit domain, emails, IAM boundary, reCAPTCHA
+   cp terraform.tfvars.example terraform.tfvars   # edit domain, emails, recaptcha_secret_key, IAM boundary
    cp backend.hcl.example backend.hcl             # set bucket/table/region from bootstrap outputs
-   export TF_VAR_recaptcha_secret_key="<google-recaptcha-v3-secret>"   # keeps the secret out of tfvars
    tofu init -reconfigure -backend-config=backend.hcl
    tofu apply
    ```
 
 3. **Upload site content** — automatic on `tofu apply` from `website/`; or manual `aws s3 sync` if preferred.
 
-4. **Full deployment guide** — see [infra/README.md](infra/README.md) (ACM, DNS, Cognito, SES).
+4. **Full deployment guide** — see [infra/README.md](infra/README.md) (ACM, DNS, SES).
 
 ## Environments
 
@@ -50,7 +51,6 @@ docs/            Project context, diagrams, budget
 | State | local | S3 remote (bootstrap) |
 | Custom domain | no | yes (after ACM + DNS) |
 | SES / contact form | no | yes |
-| DynamoDB PITR | off | on (`enable_dynamodb_pitr`) |
 | Budget alerts | no | yes ($50/month, alerts at ~$5 / $20 / $50) |
 
 ## Contact API

@@ -44,7 +44,7 @@ variable "recaptcha_min_score" {
 }
 
 variable "admin_email" {
-  description = "Cognito admin user email."
+  description = "Email that receives AWS budget alerts."
   type        = string
 }
 
@@ -58,12 +58,6 @@ variable "iam_permissions_boundary_arn" {
   description = "Optional permissions boundary ARN applied to all Lambda execution roles."
   type        = string
   default     = ""
-}
-
-variable "enable_dynamodb_pitr" {
-  description = "Enable point-in-time recovery for the metadata table."
-  type        = bool
-  default     = true
 }
 
 variable "tags" {

@@ -49,20 +49,6 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "this" {
   }
 }
 
-resource "aws_s3_bucket_cors_configuration" "this" {
-  count = var.enable_cors ? 1 : 0
-
-  bucket = aws_s3_bucket.this.id
-
-  cors_rule {
-    allowed_headers = ["*"]
-    allowed_methods = ["GET", "PUT", "POST", "HEAD"]
-    allowed_origins = var.cors_allowed_origins
-    expose_headers  = ["ETag"]
-    max_age_seconds = 3600
-  }
-}
-
 resource "aws_cloudfront_origin_access_control" "this" {
   name                              = replace("${var.bucket_name}-oac", ".", "-")
   description                       = "OAC for ${var.bucket_name}"

@@ -5,13 +5,6 @@ resource "aws_cloudfront_function" "api_strip_prefix" {
   code    = file("${path.module}/functions/api-strip-prefix.js")
 }
 
-resource "aws_cloudfront_function" "admin_spa_fallback" {
-  name    = replace("${var.distribution_name}-admin-spa", ".", "-")
-  runtime = "cloudfront-js-2.0"
-  publish = true
-  code    = file("${path.module}/functions/admin-spa-fallback.js")
-}
-
 resource "aws_cloudfront_function" "public_directory_index" {
   name    = replace("${var.distribution_name}-public-directory-index", ".", "-")
   runtime = "cloudfront-js-2.0"
@@ -107,29 +100,6 @@ resource "aws_cloudfront_distribution" "this" {
     min_ttl     = 0
     default_ttl = 86400
     max_ttl     = 31536000
-  }
-
-  ordered_cache_behavior {
-    path_pattern           = "/admin*"
-    allowed_methods        = ["GET", "HEAD", "OPTIONS"]
-    cached_methods         = ["GET", "HEAD"]
-    target_origin_id       = "s3-site"
-    viewer_protocol_policy = "redirect-to-https"
-    compress               = true
-
-    forwarded_values {
-      query_string = false
-      cookies { forward = "none" }
-    }
-
-    function_association {
-      event_type   = "viewer-request"
-      function_arn = aws_cloudfront_function.admin_spa_fallback.arn
-    }
-
-    min_ttl     = 0
-    default_ttl = 3600
-    max_ttl     = 86400
   }
 
   custom_error_response {

@@ -1,6 +1,6 @@
 # Deployment architecture
 
-Mermaid diagrams for the minimal-aws hosting stack.
+Mermaid diagrams for the minimal-aws hosting stack. The admin panel is TBD and not shown.
 
 Regions: code defaults to **eu-west-3**; the current deployment runs in **eu-north-1**. Diagrams say "primary region" for either. ACM is always in **us-east-1**.
 
@@ -10,7 +10,6 @@ Regions: code defaults to **eu-west-3**; the current deployment runs in **eu-nor
 flowchart TB
   subgraph Internet
     User[Browser / visitor]
-    Admin[Admin browser]
   end
 
   subgraph DNS["Registrar DNS (external)"]
@@ -26,23 +25,16 @@ flowchart TB
       CF["Distribution<br/>aliases: apex + www"]
       FnIndex["CF function: directory index"]
       FnAPI["CF function: strip /api prefix"]
-      FnAdmin["CF function: admin SPA fallback"]
     end
 
     subgraph Storage["S3 — single bucket (versioned)"]
       S3Root["/ index.html, assets"]
-      S3Admin["/admin/ SPA (separate project)"]
       S3Photos["/photos/ images"]
     end
 
     subgraph API["HTTP API"]
       APIGW["API Gateway v2<br/>POST /contact (throttled)"]
       LContact["Lambda contact"]
-    end
-
-    subgraph Auth["Auth & data (reserved for admin project)"]
-      Cognito["Cognito user pool<br/>+ JWT authorizer"]
-      DDB["DynamoDB metadata"]
     end
 
     SES["SES verified email"]
@@ -64,17 +56,13 @@ flowchart TB
     Tofu["OpenTofu apply"]
   end
 
-  AdminUI["Admin UI<br/>(separate project, TBD)"]
-
   User --> Apex
   User --> WWW
-  Admin --> WWW
   Apex --> CF
   WWW --> CF
   ACMVal -.-> ACM
 
   CF -->|"/"| FnIndex --> S3Root
-  CF -->|"/admin*"| FnAdmin --> S3Admin
   CF -->|"/photos/*"| S3Photos
   CF -->|"/api/*"| FnAPI --> APIGW
 
@@ -82,13 +70,10 @@ flowchart TB
   LContact --> Google
   LContact --> SES
   LContact --> Logs
-  Admin -.-> Cognito
-  APIGW -.->|"admin routes (future)"| Cognito
 
   ACM --> CF
   Tofu --> Website
   Tofu -->|website_sync| S3Root
-  AdminUI -.->|s3 sync| S3Admin
   Tofu --> StateS3
   Tofu --> StateLock
   Tofu --> Budget
@@ -99,7 +84,6 @@ flowchart TB
 ```mermaid
 flowchart LR
   CF[CloudFront] -->|default /| Idx["directory index"] --> S3Site["S3 /"]
-  CF -->|/admin*| Spa["SPA fallback"] --> S3Admin["S3 /admin/"]
   CF -->|/photos/*| S3Photos["S3 /photos/"]
   CF -->|/api/*| Fn["strip /api"] --> APIGW["API Gateway"]
 ```
@@ -119,7 +103,7 @@ flowchart TD
 
   subgraph Phase1["Phase 1 — Configure prod"]
     Config["Copy terraform.tfvars + backend.hcl from *.example"]
-    Secret["export TF_VAR_recaptcha_secret_key"]
+    Secret["Set recaptcha_secret_key in terraform.tfvars"]
     Init["tofu init -reconfigure -backend-config=backend.hcl"]
     Config --> Secret --> Init
   end
@@ -140,7 +124,7 @@ flowchart TD
     Full["tofu apply"]
     Full --> CFDeploy["CloudFront ~5–15 min<br/>aliases + ACM attached"]
     Full --> WebsiteUp["website/ → S3 via website_sync"]
-    Full --> Stack["Contact Lambda, API, Cognito, DynamoDB, SES, Budget"]
+    Full --> Stack["Contact Lambda, API, SES, Budget"]
   end
 
   CFDeploy --> DNSLive
@@ -157,11 +141,9 @@ flowchart TD
   subgraph Phase5["Phase 5 — Post-deploy"]
     Post["Post-deploy tasks"]
     Post --> SESVerify["Verify SES email"]
-    Post --> CognitoUser["Create Cognito admin user + add to admins group"]
   end
 
   SESVerify --> Done([Site live])
-  CognitoUser --> Done
 ```
 
 ## OpenTofu module dependency graph
@@ -171,8 +153,6 @@ flowchart BT
   ACM[module.acm]
   Bucket[module.site_bucket]
   Sync[module.website_sync]
-  DDB[module.metadata_table]
-  Cognito[module.cognito]
   SES[module.ses]
   LContact[module.lambda_contact]
   API[module.api]
@@ -181,14 +161,13 @@ flowchart BT
 
   Bucket --> Sync
   SES --> LContact
-  Cognito --> API
   LContact --> API
   API --> CF
   Bucket --> CF
   ACM --> CF
 ```
 
-`module.metadata_table` and `aws_budgets_budget.monthly_cost` have no dependencies on other modules. `module.cloudfront` also has an explicit `depends_on = [module.api]`.
+`aws_budgets_budget.monthly_cost` has no dependencies on other modules. `module.cloudfront` also has an explicit `depends_on = [module.api]`.
 
 ## Regions
 
@@ -196,10 +175,8 @@ flowchart BT
 flowchart LR
   subgraph primary["Primary region (eu-west-3 default, eu-north-1 deployed)"]
     S3[S3 site bucket]
-    DDB[DynamoDB]
     Lambda[Lambda contact]
     APIGW[API Gateway]
-    Cognito[Cognito]
     SES[SES]
     State[OpenTofu state]
   end
