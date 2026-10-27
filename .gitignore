@@ -38,3 +38,6 @@ venv/
 
 # Logs
 *.log
+
+# Website is custom info
+website/
