@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import binascii
+import hmac
 import html
 import json
 import os
@@ -180,6 +181,10 @@ def handler(event, context):
     del context
     event = event or {}
     origin = _header(event, "origin").rstrip("/")
+    # Set when the API is only meant to be reached through CloudFront, which adds this header.
+    origin_secret = os.getenv("ORIGIN_VERIFY_SECRET", "")
+    if origin_secret and not hmac.compare_digest(_header(event, "x-origin-verify"), origin_secret):
+        return _response(403, "FORBIDDEN", "Request is not allowed.")
     allowed_origins = _configured_values("ALLOWED_ORIGINS")
     if not allowed_origins:
         return _response(500, "CONFIGURATION_ERROR", "Contact service is not configured.")

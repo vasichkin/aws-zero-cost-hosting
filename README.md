@@ -4,7 +4,7 @@
 
 Minimal-TCO static site on AWS: one S3 bucket, one CloudFront distribution, path-based routing, a Lambda-backed contact form (reCAPTCHA v3 + SES), and AWS Budgets cost alerts.
 
-The public website in `website/` is synced to S3 by `tofu apply`.
+The public website in `website/` is synced to S3 with `aws s3 sync` (CloudFront cache invalidated afterwards) by `tofu apply`; files are not stored in the OpenTofu state.
 
 ## Architecture
 
@@ -27,50 +27,59 @@ flowchart LR
 ```
 
 - **One CloudFront distribution** is the single public entry point. Visitors reach it through the registrar's DNS (apex and `www`), and path routing sends each request to the right origin.
-- **Static site:** `/` and `/photos/*` are served from one private, versioned S3 bucket through an origin access control. `website/` is synced to it on `tofu apply`.
+- **Static site:** `/` and `/photos/*` are served from one private, versioned S3 bucket through an origin access control. `website/` is synced to it with `aws s3 sync` on `tofu apply`, followed by a CloudFront invalidation.
 - **Contact API:** `/api/*` goes to API Gateway and the `lambda/contact` function. It validates the request, checks the reCAPTCHA v3 token with Google, and sends the message through SES to the owner.
 
 More diagrams:
 
-- Request routing and regions: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
-- Deploy sequence and module dependencies: [infra/README.md](infra/README.md)
-- Contact handler request flow: [lambda/contact/README.md](lambda/contact/README.md)
+- Deploy sequence, module dependencies and regions: [docs/INFRA.md](docs/INFRA.md)
+- Contact handler request flow: [docs/API-CONTACT.md](docs/API-CONTACT.md)
 
 ## Layout
 
 ```
 infra/           OpenTofu — bootstrap, modules, dev/prod environments
 lambda/contact/  Contact form handler (validation, reCAPTCHA v3, SES) + unit tests
-website/         Static public site (synced to S3 on tofu apply)
+website/         Static public site (aws s3 sync + CloudFront invalidation on tofu apply)
 docs/            Project context, architecture diagrams, budget
 ```
 
-## Quick start
+## Quick start (happy path: nothing to live site)
 
-1. **Bootstrap remote state** (once per AWS account):
+Prerequisites: OpenTofu >= 1.7, AWS CLI with working credentials, a Google reCAPTCHA v3 key pair (site key + secret), access to your registrar's DNS.
 
-   ```bash
-   cd infra/bootstrap
-   cp terraform.tfvars.example terraform.tfvars   # edit tags/region
-   tofu init && tofu apply
-   tofu output   # note state_bucket_name, lock_table_name
-   ```
+```bash
+cd infra
 
-   Bootstrap keeps its own state **locally** in `infra/bootstrap/terraform.tfstate`. Back this file up and do not commit it.
+# 1. Remote state (once per AWS account). Note the bucket/table names it prints.
+cp bootstrap/terraform.tfvars.example bootstrap/terraform.tfvars   # edit tags/region
+make bootstrap-init bootstrap-apply
+(cd bootstrap && tofu output)
 
-2. **Prod infra**:
+# 2. Configure prod
+cp environments/prod/terraform.tfvars.example environments/prod/terraform.tfvars   # domain, emails, IAM boundary, tags
+make prod-init-first                                                               # creates backend.hcl: set bucket/table/region from step 1, then:
+make prod-init
+export TF_VAR_recaptcha_secret_key_env="<recaptcha-v3-secret>"
+# put the reCAPTCHA *site* key into website/index.html (replace CHANGE_ME in the recaptcha-site-key meta tag)
 
-   ```bash
-   cd infra/environments/prod
-   cp terraform.tfvars.example terraform.tfvars   # edit domain, emails, recaptcha_secret_key, IAM boundary
-   cp backend.hcl.example backend.hcl             # set bucket/table/region from bootstrap outputs
-   tofu init -reconfigure -backend-config=backend.hcl
-   tofu apply
-   ```
+# 3. Certificate: create it, add the printed validation CNAMEs at your registrar,
+#    set acm_wait_for_validation = true in terraform.tfvars, then validate
+make prod-acm-cert
+make prod-acm-validate
 
-3. **Upload site content** — automatic on `tofu apply` from `website/`; or manual `aws s3 sync` if preferred.
+# 4. Everything else: S3, CloudFront, API, Lambda, SES, budget, and the first website sync
+make prod-apply
+```
 
-4. **Full deployment guide** — see [infra/README.md](infra/README.md) (deploy sequence diagram, ACM, DNS, SES).
+Then, once:
+1. Click the SES verification link sent to `ses_email`.
+2. Point `www` (and the apex, via ALIAS/ANAME or redirect) at `tofu output cloudfront_domain_name` at your registrar.
+3. Open `https://<your-domain>/` and send a test message with the contact form.
+
+Updating content later: edit `website/`, then `make prod-apply` (full apply) or `make prod-sync` (only `aws s3 sync` + CloudFront invalidation).
+
+Details, DNS tables, troubleshooting and the deploy sequence diagram: [docs/INFRA.md](docs/INFRA.md).
 
 ## Environments
 
@@ -83,7 +92,7 @@ docs/            Project context, architecture diagrams, budget
 
 ## Contact API
 
-`POST /api/contact` — see [lambda/contact/README.md](lambda/contact/README.md) for the request/response contract and tests.
+`POST /api/contact` — see [docs/API-CONTACT.md](docs/API-CONTACT.md) for the request/response contract and tests.
 
 ## Configuration
 
@@ -98,6 +107,8 @@ Never commit account IDs, emails, domains, ARNs or the reCAPTCHA secret — use 
 
 See [docs/CONTEXT.md](docs/CONTEXT.md) for architecture and operational notes.
 
-See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for the request flow diagram and regions.
+See [docs/INFRA.md](docs/INFRA.md) for the deployment runbook and infrastructure details.
+
+See [docs/API-CONTACT.md](docs/API-CONTACT.md) for the contact API contract.
 
 See [docs/BUDGET.md](docs/BUDGET.md) for cost of ownership and free tier estimates.

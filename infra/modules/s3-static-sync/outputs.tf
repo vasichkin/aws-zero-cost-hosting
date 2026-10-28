@@ -1,9 +1,14 @@
-output "uploaded_keys" {
-  description = "S3 object keys uploaded from source_dir."
-  value       = sort(keys(aws_s3_object.this))
+output "content_hash" {
+  description = "Hash of the synced file list; a change triggers a new sync and CloudFront invalidation."
+  value       = local.content_hash
 }
 
-output "object_count" {
-  description = "Number of objects uploaded."
-  value       = length(aws_s3_object.this)
+output "file_count" {
+  description = "Number of files synced from source_dir."
+  value       = length(local.files)
+}
+
+output "script_path" {
+  description = "Absolute path of sync.sh, the script that publishes source_dir and invalidates CloudFront."
+  value       = abspath("${path.module}/sync.sh")
 }

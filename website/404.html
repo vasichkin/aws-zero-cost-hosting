@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>404 - Not found</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      line-height: 1.5;
+      max-width: 44rem;
+      margin: 4rem auto;
+      padding: 0 1.5rem;
+    }
+    h1 { font-size: 1.75rem; margin-bottom: 0.5rem; }
+    table { border-collapse: collapse; width: 100%; font-size: 0.85rem; }
+    th, td { text-align: left; vertical-align: top; padding: 0.3rem 0.75rem 0.3rem 0; border-bottom: 1px solid #8884; }
+    th { white-space: nowrap; width: 11rem; }
+    td { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; word-break: break-all; }
+  </style>
+</head>
+<body>
+  <h1>404 - Page not found</h1>
+  <p>The page you requested does not exist. <a href="/">Back to the home page</a>.</p>
+
+  <h2>Debug information</h2>
+  <p>Collected in your browser. CloudFront serves this page for any S3 403/404.</p>
+  <table id="debug"><tbody></tbody></table>
+
+  <script>
+    (function () {
+      var rows = document.querySelector('#debug tbody');
+
+      function add(key, value) {
+        var tr = document.createElement('tr');
+        var th = document.createElement('th');
+        var td = document.createElement('td');
+        th.textContent = key;
+        td.textContent = value === undefined || value === '' ? '-' : String(value);
+        tr.appendChild(th);
+        tr.appendChild(td);
+        rows.appendChild(tr);
+        return td;
+      }
+
+      add('Requested URL', location.href);
+      add('Path', location.pathname);
+      add('Query / hash', location.search + location.hash);
+      add('Referrer', document.referrer);
+      add('Time (local)', new Date().toString());
+      add('Time (UTC)', new Date().toISOString());
+      add('Browser', navigator.userAgent);
+      add('Language', navigator.language);
+      add('Online', navigator.onLine);
+      var probe = add('Edge response', 'checking…');
+
+      // Re-request the same URL to read the status and CloudFront headers the edge returned for it.
+      fetch(location.href, { method: 'HEAD', cache: 'no-store' })
+        .then(function (response) {
+          var names = ['x-cache', 'x-amz-cf-pop', 'x-amz-cf-id', 'via', 'server', 'date', 'content-type', 'age'];
+          probe.textContent = 'HTTP ' + response.status;
+          names.forEach(function (name) {
+            var value = response.headers.get(name);
+            if (value) { add(name, value); }
+          });
+        })
+        .catch(function (error) { probe.textContent = 'failed: ' + error.message; });
+    })();
+  </script>
+</body>
+</html>

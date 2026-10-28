@@ -4,14 +4,19 @@ variable "bucket_id" {
 }
 
 variable "source_dir" {
-  description = "Local directory whose files are uploaded to the bucket."
+  description = "Local directory synced to the bucket root (objects missing locally are deleted from the bucket)."
   type        = string
 }
 
-variable "prefix" {
-  description = "Optional S3 key prefix (empty = bucket root)."
+variable "distribution_id" {
+  description = "CloudFront distribution ID to invalidate after a sync. Empty skips the invalidation."
   type        = string
   default     = ""
+}
+
+variable "region" {
+  description = "AWS region used by the AWS CLI."
+  type        = string
 }
 
 variable "cache_control" {
@@ -20,47 +25,41 @@ variable "cache_control" {
   default     = "public, max-age=3600"
 }
 
-variable "tags" {
-  description = "Tags applied to S3 objects."
-  type        = map(string)
-  default     = {}
-}
-
+# Objects are uploaded by the AWS CLI, so they never enter the tofu state; only this hash does.
+# Dotfiles at any depth (.DS_Store, .gitkeep, ...) are ignored here and excluded from the sync below.
 locals {
-  mime_types = {
-    css  = "text/css; charset=utf-8"
-    gif  = "image/gif"
-    htm  = "text/html; charset=utf-8"
-    html = "text/html; charset=utf-8"
-    ico  = "image/x-icon"
-    jpeg = "image/jpeg"
-    jpg  = "image/jpeg"
-    js   = "application/javascript; charset=utf-8"
-    json = "application/json; charset=utf-8"
-    png  = "image/png"
-    svg  = "image/svg+xml"
-    txt  = "text/plain; charset=utf-8"
-    webp = "image/webp"
-    xml  = "application/xml; charset=utf-8"
-  }
+  files = [
+    for path in sort(fileset(var.source_dir, "**/*")) : path
+    if !anytrue([for segment in split("/", path) : startswith(segment, ".")])
+  ]
 
-  files = {
-    for path in fileset(var.source_dir, "**/*") : path => path
-    if !endswith(path, ".gitkeep") && !startswith(path, ".")
+  content_hash = sha1(join(",", [for path in local.files : "${path}:${filemd5("${var.source_dir}/${path}")}"]))
+}
+
+# Requires the AWS CLI on the machine running tofu, using the same credentials.
+# sync.sh prints every uploaded/deleted file and a final "Sync status" line into the apply log.
+resource "terraform_data" "sync" {
+  triggers_replace = [local.content_hash, var.bucket_id, var.distribution_id, var.cache_control]
+
+  provisioner "local-exec" {
+    command = "'${abspath("${path.module}/sync.sh")}'"
+
+    environment = {
+      SOURCE_DIR      = var.source_dir
+      BUCKET          = var.bucket_id
+      CACHE_CONTROL   = var.cache_control
+      DISTRIBUTION_ID = var.distribution_id
+      AWS_REGION      = var.region
+    }
   }
 }
 
-resource "aws_s3_object" "this" {
-  for_each = local.files
+# Migration from the previous aws_s3_object implementation: forget the old per-file resources
+# without deleting the objects. Safe to delete this block once every environment has applied it.
+removed {
+  from = aws_s3_object.this
 
-  bucket        = var.bucket_id
-  key           = var.prefix != "" ? "${var.prefix}/${each.key}" : each.key
-  source        = "${var.source_dir}/${each.key}"
-  etag          = filemd5("${var.source_dir}/${each.key}")
-  content_type  = try(local.mime_types[regex("\\.([^.]+)$", each.key)[0]], "application/octet-stream")
-  cache_control = var.cache_control
-
-  tags = merge(var.tags, {
-    Name = each.key
-  })
+  lifecycle {
+    destroy = false
+  }
 }

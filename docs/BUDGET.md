@@ -15,7 +15,7 @@ Prices are **approximate USD**, pay-as-you-go. Verify on the [AWS Pricing Calcul
 | **CloudFront Functions** | 2 functions (directory index, API strip) | Per invocation | Cheap; 2M invocations/month always free |
 | **S3** | Site bucket + OpenTofu state bucket | Storage + requests | No public internet egress (CloudFront/OAC only). Both versioned; site bucket expires old versions after 30 days |
 | **Lambda** | `contact` (128 MB, 10 s) | Per request + GB-seconds | ARM64, Python 3.12 |
-| **API Gateway** | HTTP API (v2) | Per million requests | No REST API premium features; contact route throttled (burst 10, 5 rps) |
+| **API Gateway** | HTTP API (v2) | Per million requests | No REST API premium features; contact route throttled (1 request/minute) |
 | **DynamoDB** | State lock table (bootstrap) | On-demand | Negligible |
 | **SES** | Verified email identity | Per email sent | Contact form only |
 | **ACM** | TLS cert (apex + www) | — | **Free** |
@@ -49,7 +49,7 @@ Relevant **always-free** limits (typical — confirm for your account):
 **Important caveats**
 
 - **S3 direct egress to internet is not free** — this design avoids it by serving only via CloudFront.
-- **CloudFront invalidations** — first 1,000 paths/month free; then ~$0.005/path (manual invalidations).
+- **CloudFront invalidations** — first 1,000 paths/month free; then ~$0.005/path (the post-sync invalidation is one `/*` path per content change).
 - **SES sandbox** — new accounts can only send to verified addresses until you request production access.
 - **Legacy accounts** (created before July 2025) may still be on the old 12-month free-tier model.
 
@@ -179,11 +179,11 @@ There is **no hourly charge** for CloudFront, Lambda (when not invoked), or API 
 
 ## Watch list (hidden costs)
 
-1. **CloudFront invalidations** — batch or narrow paths rather than invalidating `/*` on every deploy.
+1. **CloudFront invalidations** — each content change runs one `/*` invalidation (counts as one path, 1,000 free per month); avoid scripting per-file invalidations.
 2. **CloudWatch Logs** — retention is 14 days, but ingestion still bills per GB; keep handler logging lean.
 3. **SES** — sandbox limits; production access required for public contact forms.
 4. **Large `/photos/` library** — S3 storage grows linearly; CloudFront caches but origin storage bills.
-5. **API abuse** — the public contact route is throttled (burst 10, 5 rps) and protected by reCAPTCHA v3 + honeypot. Revisit limits if traffic grows.
+5. **API abuse** — the public contact route is throttled (1 request/minute) and protected by reCAPTCHA v3 + honeypot. Revisit limits if traffic grows.
 6. **Multi-environment** — dev + prod doubles baseline S3/CloudFront/API if both left running.
 
 ---

@@ -69,3 +69,17 @@ output "dns_records_manual" {
     } : null
   }
 }
+
+output "website_sync" {
+  description = "State of the website/ sync (aws s3 sync + CloudFront invalidation, run on apply)."
+  value = {
+    source_dir   = abspath("${path.module}/../../../website")
+    file_count   = module.website_sync.file_count
+    content_hash = module.website_sync.content_hash
+  }
+}
+
+output "website_sync_command" {
+  description = "Manual equivalent of the apply-time sync (aws s3 sync + CloudFront invalidation). Used by `make prod-sync` / `make dev-sync`."
+  value       = "SOURCE_DIR='${abspath("${path.module}/../../../website")}' BUCKET='${module.site_bucket.bucket_id}' DISTRIBUTION_ID='${module.cloudfront.distribution_id}' AWS_REGION='${var.aws_region}' '${module.website_sync.script_path}'"
+}

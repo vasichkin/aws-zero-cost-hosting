@@ -54,7 +54,7 @@ The message is emailed via SES from and to `ses_email`, with `Reply-To` set to t
 | Status | Code |
 |---|---|
 | 400 | `INVALID_CONTENT_TYPE`, `PAYLOAD_TOO_LARGE`, `VALIDATION_ERROR`, `INVALID_REQUEST` (honeypot) |
-| 403 | `ORIGIN_NOT_ALLOWED`, `CAPTCHA_FAILED` |
+| 403 | `FORBIDDEN` (missing/wrong `X-Origin-Verify`), `ORIGIN_NOT_ALLOWED`, `CAPTCHA_FAILED` |
 | 405 | `METHOD_NOT_ALLOWED` |
 | 500 | `CONFIGURATION_ERROR` |
 | 503 | `CAPTCHA_UNAVAILABLE`, `DELIVERY_FAILED` |

@@ -8,7 +8,7 @@ Minimal-cost AWS hosting for a static public website with a protected contact fo
 - **Single domain** with path routing through one CloudFront distribution (`www` alias for DNS when apex CNAME is blocked)
 - **Single S3 bucket** with prefixes: `/` (site), `/photos/` — versioned, 30-day expiry for old versions
 - **Two CloudFront functions**: directory index on `/` (`/about/` → `/about/index.html`), `/api` prefix strip on `/api/*`
-- **API** at `/api/*` → API Gateway HTTP API → Lambda. Live route: `POST /api/contact` (public, throttled burst 10 / 5 rps)
+- **API** at `/api/*` → API Gateway HTTP API → Lambda. Live route: `POST /api/contact` (public, throttled 1 request/minute)
 - **Contact Lambda** (`lambda/contact`): JSON validation, honeypot, Google reCAPTCHA v3, SES email. See [lambda/contact/README.md](../lambda/contact/README.md)
 - **SES** (prod) for contact form email
 - **AWS Budgets** (prod): $50/month with email alerts at ~$5 / $20 / $50
@@ -27,7 +27,7 @@ Code defaults to **eu-west-3**. The current deployment uses **eu-north-1** (`aws
 | Prod stack (CF, S3, Lambda, API, SES, ACM, Budget) | Deployed |
 | Custom domain on CloudFront | Requires `acm_wait_for_validation = true` + DNS |
 | Apex DNS | Blocked if registrar rejects CNAME with MX — use ALIAS |
-| Website content in S3 | Auto-sync on `tofu apply` via `website_sync` |
+| Website content in S3 | `aws s3 sync` + CloudFront invalidation on `tofu apply` via `website_sync` (not tracked in state; see `tofu output website_sync`) |
 | Contact Lambda | Implemented (validation + reCAPTCHA v3 + SES), unit-tested |
 ## Key decisions
 

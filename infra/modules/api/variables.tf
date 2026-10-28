@@ -34,7 +34,7 @@ variable "contact_throttling_burst_limit" {
 }
 
 variable "contact_throttling_rate_limit" {
-  description = "Sustained requests per second for the public contact route."
+  description = "Sustained requests per second for the public contact route (fractions allowed, e.g. 1/60 = one per minute)."
   type        = number
   default     = 5
 }

@@ -1,5 +1,5 @@
 terraform {
-  required_version = ">= 1.6.0"
+  required_version = ">= 1.7.0"
 
   required_providers {
     aws = {
@@ -43,9 +43,10 @@ module "site_bucket" {
 module "website_sync" {
   source = "../../modules/s3-static-sync"
 
-  bucket_id  = module.site_bucket.bucket_id
-  source_dir = "${path.module}/../../../website"
-  tags       = local.common_tags
+  bucket_id       = module.site_bucket.bucket_id
+  source_dir      = "${path.module}/../../../website"
+  distribution_id = module.cloudfront.distribution_id
+  region          = var.aws_region
 }
 
 module "api" {

@@ -1,8 +1,10 @@
 <!DOCTYPE html>
-<html lang="uk">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- Public reCAPTCHA v3 *site* key (not the secret). Replace CHANGE_ME with your own. -->
+  <meta name="recaptcha-site-key" content="6Ld8obItAAAAAKVB1GJSDPOCK77zRdU6vxzLxUAh">
   <title>Welcome</title>
   <style>
     :root { color-scheme: light dark; }
@@ -14,14 +16,135 @@
       padding: 0 1.5rem;
     }
     h1 { font-size: 1.75rem; margin-bottom: 0.5rem; }
+    h2 { font-size: 1.25rem; margin-top: 2.5rem; }
     p { color: #555; }
+    form { display: grid; gap: 0.75rem; }
+    label { display: grid; gap: 0.25rem; font-size: 0.9rem; }
+    input, select, textarea, button { font: inherit; padding: 0.5rem; }
+    .consent { display: flex; gap: 0.5rem; align-items: start; }
+    .hp { position: absolute; left: -10000px; }
+    #status { min-height: 1.5em; }
+    #status.ok { color: #1a7f37; }
+    #status.err { color: #cf222e; }
     @media (prefers-color-scheme: dark) {
       p { color: #aaa; }
+      #status.ok { color: #3fb950; }
+      #status.err { color: #ff7b72; }
     }
   </style>
 </head>
 <body>
   <h1>Welcome</h1>
   <p>Site is live. Replace this page by updating files in <code>website/</code> and running <code>tofu apply</code>.</p>
+
+  <h2>Contact</h2>
+  <form id="contact-form" novalidate>
+    <label>Name
+      <input name="name" maxlength="120" autocomplete="name" required>
+    </label>
+    <label>Email
+      <input name="email" type="email" maxlength="254" autocomplete="email" required>
+    </label>
+    <label>Phone (optional)
+      <input name="phone" type="tel" maxlength="40" autocomplete="tel">
+    </label>
+    <label>Subject
+      <input name="projectType" maxlength="80" value="General enquiry" required>
+    </label>
+    <label>Message
+      <textarea name="message" rows="5" maxlength="4000" required></textarea>
+    </label>
+    <!-- Honeypot: the API rejects any submission where this is filled in. Deliberately not named "company"/"name"/"url", which browsers autofill. -->
+    <label class="hp" aria-hidden="true">Leave this field empty
+      <input name="honeypot" tabindex="-1" autocomplete="off" data-lpignore="true" data-1p-ignore>
+    </label>
+    <label class="consent">
+      <input name="consent" type="checkbox" required>
+      <span>I agree to my details being used to reply to this message.</span>
+    </label>
+    <button type="submit">Send</button>
+    <p id="status" role="status" aria-live="polite"></p>
+  </form>
+
+  <script>
+    (function () {
+      var SITE_KEY = document.querySelector('meta[name="recaptcha-site-key"]').content;
+      var LOCALES = ['pl', 'en', 'uk'];
+      var form = document.getElementById('contact-form');
+      var statusEl = document.getElementById('status');
+      var button = form.querySelector('button');
+
+      function say(text, kind) {
+        statusEl.textContent = text;
+        statusEl.className = kind || '';
+      }
+
+      var KEY_MISSING = !SITE_KEY || SITE_KEY === 'CHANGE_ME';
+      if (KEY_MISSING) { say('reCAPTCHA site key not configured', 'err'); }
+
+      function loadRecaptcha() {
+        return new Promise(function (resolve, reject) {
+          if (window.grecaptcha) { return resolve(window.grecaptcha); }
+          var s = document.createElement('script');
+          s.src = 'https://www.google.com/recaptcha/api.js?render=' + encodeURIComponent(SITE_KEY);
+          s.onload = function () { window.grecaptcha.ready(function () { resolve(window.grecaptcha); }); };
+          s.onerror = function () { reject(new Error('recaptcha-load')); };
+          document.head.appendChild(s);
+        });
+      }
+
+      function messageFor(status, code) {
+        if (status === 429) { return 'Too many messages right now. Please try again in a minute.'; }
+        if (code === 'CAPTCHA_FAILED') { return 'Anti-spam check failed. Please try again.'; }
+        if (code === 'VALIDATION_ERROR') { return 'Please check the form fields.'; }
+        return 'Could not send the message (' + (code || status) + '). Please try again later.';
+      }
+
+      form.addEventListener('submit', function (event) {
+        event.preventDefault();
+        if (KEY_MISSING) { say('reCAPTCHA site key not configured', 'err'); return; }
+        if (!form.reportValidity()) { return; }
+
+        var lang = (document.documentElement.lang || 'en').slice(0, 2).toLowerCase();
+        var data = new FormData(form);
+        var body = {
+          name: data.get('name'),
+          email: data.get('email'),
+          phone: data.get('phone'),
+          projectType: data.get('projectType'),
+          message: data.get('message'),
+          honeypot: data.get('honeypot'),
+          locale: LOCALES.indexOf(lang) >= 0 ? lang : 'en',
+          consent: form.elements.consent.checked
+        };
+
+        button.disabled = true;
+        say('Sending…');
+
+        loadRecaptcha()
+          .then(function (grecaptcha) { return grecaptcha.execute(SITE_KEY, { action: 'contact' }); })
+          .then(function (token) {
+            body.recaptchaToken = token;
+            return fetch('/api/contact', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(body)
+            });
+          })
+          .then(function (response) {
+            return response.json().catch(function () { return {}; }).then(function (json) {
+              if (response.ok && json.ok) {
+                form.reset();
+                say('Thank you! Your message was sent.', 'ok');
+              } else {
+                say(messageFor(response.status, json.error && json.error.code), 'err');
+              }
+            });
+          })
+          .catch(function () { say('Network or anti-spam script error. Please try again.', 'err'); })
+          .then(function () { button.disabled = false; });
+      });
+    })();
+  </script>
 </body>
 </html>

@@ -50,6 +50,18 @@ class ContactHandlerTests(unittest.TestCase):
         event["headers"]["origin"] = "https://attacker.example"
         self.assertEqual(self.status(event), 403)
 
+    def test_origin_verify_header_required_when_configured(self):
+        os.environ["ORIGIN_VERIFY_SECRET"] = "shared"
+        with mock.patch.object(handler, "_verify_recaptcha", return_value=(True, "ok")), \
+             mock.patch.object(handler, "_send_email"):
+            self.assertEqual(self.status(self.event()), 403)
+            wrong = self.event()
+            wrong["headers"]["X-Origin-Verify"] = "nope"
+            self.assertEqual(self.status(wrong), 403)
+            right = self.event()
+            right["headers"]["X-Origin-Verify"] = "shared"
+            self.assertEqual(self.status(right), 200)
+
     def test_rejects_invalid_and_oversized_payloads(self):
         self.assertEqual(self.status(self.event(body="{")), 400)
         self.assertEqual(self.status(self.event(body="x" * (handler.MAX_BODY_BYTES + 1))), 400)
