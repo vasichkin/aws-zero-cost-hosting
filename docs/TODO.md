@@ -12,7 +12,6 @@ Open work items from the DevOps review. Highest priority first.
 
 ## Medium
 
-- [ ] **Organise make commands.** `infra/Makefile` has grown per-environment targets (`dev-*`, `prod-*`, `bootstrap-*`, ACM phases, sync) with duplicated recipes. Group them by area, parametrize the environment (for example `make plan ENV=prod`), add a `help` target that lists commands with descriptions, add `fmt-check`/`validate`/test targets for CI, and document the final set in one place.
 
 - [ ] **Observability.** No alarms on Lambda errors, API 5xx or SES bounces/complaints, and no SNS topic. The handler returns 503 on SES failure without logging the cause, so lost messages cannot be diagnosed. Add structured logging on every non-200 path, API Gateway access logs, CloudWatch alarms and an SNS notification.
 - [ ] **Email deliverability.** SES uses an *email* identity, so there is no DKIM/SPF/DMARC under your domain, and From equals To. Move to a domain identity with DKIM and DMARC records; confirm the SES sandbox/production status.
@@ -35,6 +34,8 @@ Open work items from the DevOps review. Highest priority first.
 
 ## Done in this iteration
 
+- Root `Makefile` with `bootstrap`, `dev|prod-apply`, `dev|prod-destroy`, `dev|prod-sync`, `help`; `infra/Makefile` removed. Site bucket uses `force_destroy` so destroy works with synced content.
+  - Follow-ups if CI needs them: `fmt-check`/`validate` targets.
 - `s3-static-sync` now uses `aws s3 sync` (no per-file state) and invalidates CloudFront; dotfiles are skipped at any depth.
 - Env var `TF_VAR_recaptcha_secret_key_env` takes precedence over `terraform.tfvars`.
 - CloudFront sends a secret `X-Origin-Verify` header and the Lambda rejects requests without it (direct `execute-api` hits are blocked).

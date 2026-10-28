@@ -80,6 +80,6 @@ output "website_sync" {
 }
 
 output "website_sync_command" {
-  description = "Manual equivalent of the apply-time sync (aws s3 sync + CloudFront invalidation). Used by `make prod-sync` / `make dev-sync`."
+  description = "Manual equivalent of the apply-time sync (aws s3 sync + CloudFront invalidation). Used by `make dev-sync` / `make prod-sync`."
   value       = "SOURCE_DIR='${abspath("${path.module}/../../../website")}' BUCKET='${module.site_bucket.bucket_id}' DISTRIBUTION_ID='${module.cloudfront.distribution_id}' AWS_REGION='${var.aws_region}' '${module.website_sync.script_path}'"
 }
