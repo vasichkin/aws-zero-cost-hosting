@@ -37,7 +37,9 @@ module "site_bucket" {
   source = "../../modules/s3-bucket"
 
   bucket_name = "${local.name_prefix}-site"
-  tags        = local.common_tags
+  # Site content is uploaded by aws s3 sync (not in state), so destroy must empty the bucket itself.
+  force_destroy = true
+  tags          = local.common_tags
 }
 
 module "website_sync" {

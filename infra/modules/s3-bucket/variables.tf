@@ -9,6 +9,12 @@ variable "tags" {
   default     = {}
 }
 
+variable "force_destroy" {
+  description = "Delete all objects and versions when the bucket is destroyed (needed because content is synced outside the state)."
+  type        = bool
+  default     = false
+}
+
 variable "enable_versioning" {
   description = "Enable S3 bucket versioning for rollback safety."
   type        = bool

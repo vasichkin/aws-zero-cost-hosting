@@ -142,7 +142,7 @@ The sync and invalidation run only when `website/` content changed (the hash in 
 
 ```bash
 cd infra
-make prod-sync        # or: make dev-sync
+make prod-sync        # or: make dev-sync (from the repository root)
 ```
 
 It runs `tofu output website_sync_command` (also usable by hand). Output lists every uploaded and deleted file and ends with a status line, for example:
@@ -223,20 +223,21 @@ Request/response contract: see [lambda/contact/README.md](../lambda/contact/READ
 
 Prod creates `aws_budgets_budget.monthly_cost`: $50/month cost budget with ACTUAL-spend email alerts to `admin_email` at 10% (~$5), 40% (~$20) and 100% ($50).
 
-## Makefile targets
+## Make targets
+
+Run from the repository root (`Makefile`):
 
 ```bash
-make bootstrap-init | bootstrap-plan | bootstrap-apply   # state bucket + lock table
-make dev-init | dev-plan | dev-apply | dev-destroy
-make prod-init-first    # copy backend.hcl.example → backend.hcl, init
-make prod-init          # init with existing backend.hcl
-make prod-acm-cert | prod-acm-validate   # ACM phases A and B (see deploy steps)
-make prod-plan | prod-apply
-make prod-sync | dev-sync             # publish website/ now: aws s3 sync + CloudFront invalidation
-make fmt validate
+make bootstrap                 # state bucket + lock table (once per AWS account)
+make dev-apply | prod-apply    # tofu init + apply (prod uses backend.hcl); includes website sync
+make dev-destroy | prod-destroy
+make dev-sync | prod-sync      # publish website/ now: aws s3 sync + CloudFront invalidation
+make help
 ```
 
-`make prod-init` runs `tofu init -backend-config=backend.hcl` without `-reconfigure`; add it manually when switching backends.
+`ARGS` is passed to `tofu apply` / `tofu destroy`, for example `make prod-apply ARGS=-auto-approve`. For anything else (`plan`, `fmt`, `validate`, targeted applies such as `-target=module.acm`) run `tofu` directly in the environment folder. `prod-apply` runs `tofu init -backend-config=backend.hcl` without `-reconfigure`; add it manually when switching backends.
+
+The site bucket is created with `force_destroy`, because website content is uploaded by `aws s3 sync` and is not in the state. `make *-destroy` therefore deletes the bucket together with all of its content and versions. Buckets created before this change need one `make *-apply` to record the setting before a destroy works.
 
 `dev` provisions its own CloudFront distribution, S3 bucket and HTTP API (no contact route, no SES, no budget) alongside `prod`. These are usage-based and cost ~$0 idle, but run `make dev-destroy` when you're done with a session to avoid leaving duplicate baseline resources around.
 

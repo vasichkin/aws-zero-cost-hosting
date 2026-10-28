@@ -46,29 +46,24 @@ docs/            Project context, architecture diagrams, budget
 
 ## Quick start (happy path: nothing to live site)
 
-Prerequisites: OpenTofu >= 1.7, AWS CLI with working credentials, a Google reCAPTCHA v3 key pair (site key + secret), access to your registrar's DNS.
+Prerequisites: OpenTofu >= 1.7, AWS CLI with working credentials, a Google reCAPTCHA v3 key pair (site key + secret), access to your registrar's DNS. Run everything from the repository root.
 
 ```bash
-cd infra
-
 # 1. Remote state (once per AWS account). Note the bucket/table names it prints.
-cp bootstrap/terraform.tfvars.example bootstrap/terraform.tfvars   # edit tags/region
-make bootstrap-init bootstrap-apply
-(cd bootstrap && tofu output)
+cp infra/bootstrap/terraform.tfvars.example infra/bootstrap/terraform.tfvars   # edit tags/region
+make bootstrap
 
 # 2. Configure prod
-cp environments/prod/terraform.tfvars.example environments/prod/terraform.tfvars   # domain, emails, IAM boundary, tags
-make prod-init-first                                                               # creates backend.hcl: set bucket/table/region from step 1, then:
-make prod-init
+cp infra/environments/prod/terraform.tfvars.example infra/environments/prod/terraform.tfvars   # domain, emails, IAM boundary, tags
+cp infra/environments/prod/backend.hcl.example infra/environments/prod/backend.hcl             # bucket/table/region from step 1
 export TF_VAR_recaptcha_secret_key_env="<recaptcha-v3-secret>"
 # put the reCAPTCHA *site* key into website/index.html (replace CHANGE_ME in the recaptcha-site-key meta tag)
 
-# 3. Certificate: create it, add the printed validation CNAMEs at your registrar,
-#    set acm_wait_for_validation = true in terraform.tfvars, then validate
-make prod-acm-cert
-make prod-acm-validate
+# 3. First apply: S3, CloudFront (default domain), API, Lambda, SES, budget, ACM certificate, website sync
+make prod-apply
 
-# 4. Everything else: S3, CloudFront, API, Lambda, SES, budget, and the first website sync
+# 4. Custom domain: add the ACM validation CNAMEs at your registrar (from `tofu output acm_dns_validation_records`
+#    in infra/environments/prod), set acm_wait_for_validation = true in terraform.tfvars, then apply again
 make prod-apply
 ```
 
@@ -77,9 +72,16 @@ Then, once:
 2. Point `www` (and the apex, via ALIAS/ANAME or redirect) at `tofu output cloudfront_domain_name` at your registrar.
 3. Open `https://<your-domain>/` and send a test message with the contact form.
 
-Updating content later: edit `website/`, then `make prod-apply` (full apply) or `make prod-sync` (only `aws s3 sync` + CloudFront invalidation).
+Day-to-day:
 
-Details, DNS tables, troubleshooting and the deploy sequence diagram: [docs/INFRA.md](docs/INFRA.md).
+| Command | What it does |
+|---|---|
+| `make prod-sync` | Publish `website/` now: `aws s3 sync` + CloudFront invalidation, no full apply |
+| `make prod-apply` | Apply infrastructure changes (also syncs the website when its content changed) |
+| `make dev-apply` / `dev-sync` / `dev-destroy` | The same for the dev environment (local state, CloudFront default domain) |
+| `make prod-destroy` | Destroy prod (asks for confirmation; deletes the site bucket and its content) |
+
+Add `ARGS=-auto-approve` to skip tofu's confirmation, for example `make dev-destroy ARGS=-auto-approve`. Details, DNS tables, troubleshooting and the deploy sequence diagram: [docs/INFRA.md](docs/INFRA.md).
 
 ## Environments
 
