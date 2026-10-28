@@ -5,7 +5,7 @@ variable "project_name" {
 }
 
 variable "aws_region" {
-  description = "AWS region for the state bucket and lock table."
+  description = "AWS region for the state bucket."
   type        = string
   default     = "eu-west-3"
 }

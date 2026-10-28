@@ -37,14 +37,13 @@ Record outputs:
 
 ```bash
 tofu output -raw state_bucket_name    # e.g. minimal-aws-tofu-state
-tofu output -raw lock_table_name      # e.g. minimal-aws-tofu-lock
 ```
 
 ## Prod deploy sequence
 
 ```mermaid
 flowchart TD
-  Boot["Bootstrap<br/>infra/bootstrap, local state<br/>creates state bucket + lock table"]
+  Boot["Bootstrap<br/>infra/bootstrap, local state<br/>creates state bucket"]
   Cfg["Configure prod<br/>terraform.tfvars + backend.hcl<br/>tofu init -reconfigure"]
   Cert["ACM certificate<br/>tofu apply -target=module.acm<br/>(us-east-1)"]
   Val["Add validation CNAMEs<br/>at registrar"]
@@ -83,7 +82,7 @@ or uncomment `recaptcha_secret_key` in `terraform.tfvars` (gitignored). `tofu pl
 
 The reCAPTCHA **site key** is public and is not set in Terraform: replace `CHANGE_ME` in `<meta name="recaptcha-site-key">` in `website/index.html` (and any other page with a form) with the site key from the same Google reCAPTCHA v3 registration, with your domain(s) allowed. Until then the contact form cannot get a token.
 
-Edit `backend.hcl` with bucket, table and region from bootstrap outputs.
+Edit `backend.hcl` with the bucket and region from bootstrap outputs. State locking is S3-native (`use_lockfile` in `main.tf`), so no lock table is needed.
 
 ```bash
 tofu init -reconfigure -backend-config=backend.hcl
@@ -228,7 +227,7 @@ Prod creates `aws_budgets_budget.monthly_cost`: $50/month cost budget with ACTUA
 Run from the repository root (`Makefile`):
 
 ```bash
-make bootstrap                 # state bucket + lock table (once per AWS account)
+make bootstrap                 # state bucket (once per AWS account)
 make dev-apply | prod-apply    # tofu init + apply (prod uses backend.hcl); includes website sync
 make dev-destroy | prod-destroy
 make dev-sync | prod-sync      # publish website/ now: aws s3 sync + CloudFront invalidation
@@ -279,7 +278,7 @@ The site bucket is created with `force_destroy`, because website content is uplo
 | reCAPTCHA secret (required, sensitive) | `TF_VAR_recaptcha_secret_key_env` (wins) or `recaptcha_secret_key` in `terraform.tfvars` (gitignored) |
 | reCAPTCHA site key (public) | `<meta name="recaptcha-site-key">` in `website/index.html` |
 | `recaptcha_min_score` | `terraform.tfvars` — default 0.5 |
-| State backend bucket/table/region | `backend.hcl` (gitignored; template `backend.hcl.example`) |
+| State backend bucket/region | `backend.hcl` (gitignored; template `backend.hcl.example`) |
 | IAM permissions boundary | `terraform.tfvars` |
 | `acm_wait_for_validation` | `terraform.tfvars` — controls CloudFront alias + cert |
 

@@ -49,13 +49,13 @@ docs/            Project context, architecture diagrams, budget
 Prerequisites: OpenTofu >= 1.7, AWS CLI with working credentials, a Google reCAPTCHA v3 key pair (site key + secret), access to your registrar's DNS. Run everything from the repository root.
 
 ```bash
-# 1. Remote state (once per AWS account). Note the bucket/table names it prints.
+# 1. Remote state (once per AWS account). Note the bucket name it prints.
 cp infra/bootstrap/terraform.tfvars.example infra/bootstrap/terraform.tfvars   # edit tags/region
 make bootstrap
 
 # 2. Configure prod
 cp infra/environments/prod/terraform.tfvars.example infra/environments/prod/terraform.tfvars   # domain, emails, IAM boundary, tags
-cp infra/environments/prod/backend.hcl.example infra/environments/prod/backend.hcl             # bucket/table/region from step 1
+cp infra/environments/prod/backend.hcl.example infra/environments/prod/backend.hcl             # bucket/region from step 1
 export TF_VAR_recaptcha_secret_key_env="<recaptcha-v3-secret>"
 # put the reCAPTCHA *site* key into website/index.html (replace CHANGE_ME in the recaptcha-site-key meta tag)
 

@@ -6,7 +6,7 @@ INIT_prod := -backend-config=backend.hcl
 .PHONY: help bootstrap $(ENVS:%=%-apply) $(ENVS:%=%-destroy) $(ENVS:%=%-sync)
 
 help:
-	@echo "bootstrap                   create the remote state bucket + lock table (once per AWS account)"
+	@echo "bootstrap                   create the remote state bucket (once per AWS account)"
 	@echo "dev-apply   | prod-apply   init + apply an environment (includes website sync + CloudFront invalidation)"
 	@echo "dev-destroy | prod-destroy destroy an environment (asks for confirmation; deletes the site bucket content)"
 	@echo "dev-sync    | prod-sync    publish website/ now: aws s3 sync + CloudFront invalidation, no full apply"

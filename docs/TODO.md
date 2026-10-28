@@ -8,7 +8,7 @@ Open work items from the DevOps review. Highest priority first.
 - [ ] **Move the reCAPTCHA secret to SSM Parameter Store (SecureString).** Today it is a Lambda env var and appears in plaintext in the tofu state. Pass only the parameter name to the Lambda, grant `ssm:GetParameter` on that one parameter, and read it at cold start. Until then, set it via `terraform.tfvars` or `TF_VAR_recaptcha_secret_key_env`.
 - [ ] **CI/CD pipeline.** Nothing runs `tofu fmt -check`, `validate`, tflint, checkov/trivy or the Lambda tests, and deploys happen from a laptop. Add a pipeline using OIDC to a least-privilege deploy role, `plan -out` then apply that exact plan, and a manual approval for prod.
 - [ ] **Run content deploys from CI.** Content is now synced by `aws s3 sync` from `tofu apply`, so it is out of the state but still needs infra credentials. When CI exists, move the sync and invalidation into a separate job with a role limited to the site bucket and `cloudfront:CreateInvalidation`.
-- [ ] **Global-only throttling.** The contact route is limited to 1 request/minute across all visitors, so one bot can lock out real users, and failed reCAPTCHA attempts also use the quota. Per-client limits need WAF (rate-based rule, paid) or a counter in the Lambda (DynamoDB). Also set Lambda reserved concurrency.
+- [ ] **Global-only throttling.** The contact route is limited to 1 request/minute across all visitors, so one bot can lock out real users, and failed reCAPTCHA attempts also use the quota. Per-client limits need WAF (rate-based rule, paid). Also set Lambda reserved concurrency.
 
 ## Medium
 
@@ -26,7 +26,6 @@ Open work items from the DevOps review. Highest priority first.
   - Add `prevent_destroy` on the state bucket and the site bucket.
   - Add a TLS-only bucket policy, a lifecycle rule for old state versions, and access logging on the state bucket.
   - Make the state bucket name globally unique (add the account ID).
-  - Replace the DynamoDB lock table with S3-native locking (`use_lockfile`) on current OpenTofu.
 - [ ] **Unify dev and prod.** `environments/dev/main.tf` is a different, smaller composition with a local backend, so dev does not test what prod runs. Use one shared root or composition module driven by tfvars. Dev also has no budget.
 - [ ] **Reproducible builds.** `.terraform.lock.hcl` is gitignored, yet `infra/bootstrap/.terraform.lock.hcl` is tracked. Commit all lock files. Add an upper bound to `required_version` and plan the move to AWS provider 6.x.
 - [ ] **Budget thresholds.** The estimate is $0–2/month, but the first alert fires at $5 (10% of $50) and only on `ACTUAL`. Lower the first alert to about $1–2, add a `FORECASTED` alert, enable Cost Anomaly Detection (free) and add a budget for dev.
@@ -34,6 +33,7 @@ Open work items from the DevOps review. Highest priority first.
 
 ## Done in this iteration
 
+- DynamoDB removed from the project: state locking is S3-native (`use_lockfile`), the lock table is gone from bootstrap, docs and IAM policies.
 - Root `Makefile` with `bootstrap`, `dev|prod-apply`, `dev|prod-destroy`, `dev|prod-sync`, `help`; `infra/Makefile` removed. Site bucket uses `force_destroy` so destroy works with synced content.
   - Follow-ups if CI needs them: `fmt-check`/`validate` targets.
 - `s3-static-sync` now uses `aws s3 sync` (no per-file state) and invalidates CloudFront; dotfiles are skipped at any depth.

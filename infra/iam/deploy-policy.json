@@ -1,0 +1,206 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "StateBackendObjects",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject",
+        "s3:PutObject",
+        "s3:DeleteObject"
+      ],
+      "Resource": [
+        "arn:aws:s3:::STATE_BUCKET/*"
+      ]
+    },
+    {
+      "Sid": "StateBackendList",
+      "Effect": "Allow",
+      "Action": [
+        "s3:ListBucket"
+      ],
+      "Resource": [
+        "arn:aws:s3:::STATE_BUCKET"
+      ]
+    },
+    {
+      "Sid": "SiteBucketAndContent",
+      "Effect": "Allow",
+      "Action": [
+        "s3:*Bucket*",
+        "s3:*Object*",
+        "s3:GetEncryptionConfiguration",
+        "s3:PutEncryptionConfiguration",
+        "s3:GetLifecycleConfiguration",
+        "s3:PutLifecycleConfiguration"
+      ],
+      "Resource": [
+        "arn:aws:s3:::PROJECT-*-site",
+        "arn:aws:s3:::PROJECT-*-site/*"
+      ]
+    },
+    {
+      "Sid": "CloudFrontDistributionFunctionsOac",
+      "Effect": "Allow",
+      "Action": [
+        "cloudfront:*Distribution*",
+        "cloudfront:*Function*",
+        "cloudfront:*OriginAccessControl*",
+        "cloudfront:*Invalidation*",
+        "cloudfront:TagResource",
+        "cloudfront:UntagResource",
+        "cloudfront:ListTagsForResource"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "AcmCertificate",
+      "Effect": "Allow",
+      "Action": [
+        "acm:RequestCertificate",
+        "acm:DescribeCertificate",
+        "acm:DeleteCertificate",
+        "acm:ListCertificates",
+        "acm:AddTagsToCertificate",
+        "acm:RemoveTagsFromCertificate",
+        "acm:ListTagsForCertificate"
+      ],
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": {
+          "aws:RequestedRegion": "us-east-1"
+        }
+      }
+    },
+    {
+      "Sid": "HttpApi",
+      "Effect": "Allow",
+      "Action": [
+        "apigateway:GET",
+        "apigateway:POST",
+        "apigateway:PUT",
+        "apigateway:PATCH",
+        "apigateway:DELETE"
+      ],
+      "Resource": [
+        "arn:aws:apigateway:REGION::/apis",
+        "arn:aws:apigateway:REGION::/apis/*",
+        "arn:aws:apigateway:REGION::/tags/*"
+      ]
+    },
+    {
+      "Sid": "ContactLambda",
+      "Effect": "Allow",
+      "Action": [
+        "lambda:CreateFunction",
+        "lambda:DeleteFunction",
+        "lambda:GetFunction*",
+        "lambda:UpdateFunction*",
+        "lambda:ListVersionsByFunction",
+        "lambda:GetPolicy",
+        "lambda:AddPermission",
+        "lambda:RemovePermission",
+        "lambda:TagResource",
+        "lambda:UntagResource",
+        "lambda:ListTags"
+      ],
+      "Resource": [
+        "arn:aws:lambda:REGION:ACCOUNT_ID:function:PROJECT_SAFE-*"
+      ]
+    },
+    {
+      "Sid": "LambdaExecutionRole",
+      "Effect": "Allow",
+      "Action": [
+        "iam:CreateRole",
+        "iam:DeleteRole",
+        "iam:GetRole",
+        "iam:UpdateAssumeRolePolicy",
+        "iam:PutRolePolicy",
+        "iam:GetRolePolicy",
+        "iam:DeleteRolePolicy",
+        "iam:ListRolePolicies",
+        "iam:ListAttachedRolePolicies",
+        "iam:ListInstanceProfilesForRole",
+        "iam:TagRole",
+        "iam:UntagRole",
+        "iam:PassRole"
+      ],
+      "Resource": [
+        "arn:aws:iam::ACCOUNT_ID:role/PROJECT_SAFE-*"
+      ]
+    },
+    {
+      "Sid": "AttachBasicExecutionPolicyOnly",
+      "Effect": "Allow",
+      "Action": [
+        "iam:AttachRolePolicy",
+        "iam:DetachRolePolicy"
+      ],
+      "Resource": [
+        "arn:aws:iam::ACCOUNT_ID:role/PROJECT_SAFE-*"
+      ],
+      "Condition": {
+        "ArnEquals": {
+          "iam:PolicyARN": "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        }
+      }
+    },
+    {
+      "Sid": "LambdaLogGroup",
+      "Effect": "Allow",
+      "Action": [
+        "logs:CreateLogGroup",
+        "logs:DeleteLogGroup",
+        "logs:PutRetentionPolicy",
+        "logs:DeleteRetentionPolicy",
+        "logs:TagResource",
+        "logs:UntagResource",
+        "logs:ListTagsForResource",
+        "logs:ListTagsLogGroup"
+      ],
+      "Resource": [
+        "arn:aws:logs:REGION:ACCOUNT_ID:log-group:/aws/lambda/PROJECT_SAFE-*",
+        "arn:aws:logs:REGION:ACCOUNT_ID:log-group:/aws/lambda/PROJECT_SAFE-*:*"
+      ]
+    },
+    {
+      "Sid": "LogGroupDescribe",
+      "Effect": "Allow",
+      "Action": [
+        "logs:DescribeLogGroups"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "SesEmailIdentity",
+      "Effect": "Allow",
+      "Action": [
+        "ses:VerifyEmailIdentity",
+        "ses:DeleteIdentity",
+        "ses:GetIdentityVerificationAttributes",
+        "ses:ListIdentities"
+      ],
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": {
+          "aws:RequestedRegion": "REGION"
+        }
+      }
+    },
+    {
+      "Sid": "CostBudget",
+      "Effect": "Allow",
+      "Action": [
+        "budgets:ViewBudget",
+        "budgets:ModifyBudget",
+        "budgets:TagResource",
+        "budgets:UntagResource",
+        "budgets:ListTagsForResource"
+      ],
+      "Resource": [
+        "arn:aws:budgets::ACCOUNT_ID:budget/PROJECT-*"
+      ]
+    }
+  ]
+}

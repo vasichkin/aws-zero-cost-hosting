@@ -23,7 +23,7 @@ Code defaults to **eu-west-3**. The current deployment uses **eu-north-1** (`aws
 
 | Component | Status |
 |---|---|
-| Bootstrap (S3 state + DynamoDB lock) | Deployed |
+| Bootstrap (S3 state, S3-native locking) | Deployed |
 | Prod stack (CF, S3, Lambda, API, SES, ACM, Budget) | Deployed |
 | Custom domain on CloudFront | Requires `acm_wait_for_validation = true` + DNS |
 | Apex DNS | Blocked if registrar rejects CNAME with MX — use ALIAS |

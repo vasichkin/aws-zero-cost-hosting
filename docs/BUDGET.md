@@ -16,7 +16,6 @@ Prices are **approximate USD**, pay-as-you-go. Verify on the [AWS Pricing Calcul
 | **S3** | Site bucket + OpenTofu state bucket | Storage + requests | No public internet egress (CloudFront/OAC only). Both versioned; site bucket expires old versions after 30 days |
 | **Lambda** | `contact` (128 MB, 10 s) | Per request + GB-seconds | ARM64, Python 3.12 |
 | **API Gateway** | HTTP API (v2) | Per million requests | No REST API premium features; contact route throttled (1 request/minute) |
-| **DynamoDB** | State lock table (bootstrap) | On-demand | Negligible |
 | **SES** | Verified email identity | Per email sent | Contact form only |
 | **ACM** | TLS cert (apex + www) | — | **Free** |
 | **CloudWatch Logs** | Lambda execution logs | Ingestion + storage | 14-day retention set in code; ingestion is the first “surprise” at scale |
@@ -38,13 +37,10 @@ Relevant **always-free** limits (typical — confirm for your account):
 |---|---|---|
 | **CloudFront** | 1 TB data transfer out, 10M HTTP(S) requests | Yes — main public traffic |
 | **Lambda** | 1M requests, 400K GB-seconds | Yes — contact form |
-| **DynamoDB** | 25 GB storage, 25 RCU/WCU worth of on-demand* | Yes — state lock table only |
 | **S3** | 5 GB storage (often 12-month for new accounts) | Yes — small static site |
 | **API Gateway HTTP** | 1M requests (often **12-month** for new accounts) | Yes — low API volume |
 | **SES** | 3,000 messages/month (12-month) when out of sandbox | Contact form only |
 | **CloudWatch** | 5 GB log ingestion (limited always-free) | Watch Lambda logs |
-
-\*On-demand DynamoDB free tier is expressed as read/write units; small apps stay within it.
 
 **Important caveats**
 

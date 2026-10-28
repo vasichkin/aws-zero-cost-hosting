@@ -1,5 +1,5 @@
 terraform {
-  required_version = ">= 1.7.0"
+  required_version = ">= 1.10.0" # use_lockfile (S3-native state locking)
 
   required_providers {
     aws = {
@@ -16,10 +16,12 @@ terraform {
     }
   }
 
-  # Bucket/table/region supplied via backend.hcl at init (see backend.hcl.example).
+  # Bucket/region supplied via backend.hcl at init (see backend.hcl.example).
+  # Locking uses a .tflock object next to the state file in the same bucket.
   backend "s3" {
-    key     = "prod/terraform.tfstate"
-    encrypt = true
+    key          = "prod/terraform.tfstate"
+    encrypt      = true
+    use_lockfile = true
   }
 }
 
