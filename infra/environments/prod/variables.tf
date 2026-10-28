@@ -27,8 +27,18 @@ variable "ses_email" {
 }
 
 variable "recaptcha_secret_key" {
-  description = "Google reCAPTCHA v3 secret used only by the contact Lambda."
+  description = "Google reCAPTCHA v3 secret (terraform.tfvars). Overridden by recaptcha_secret_key_env when that is set."
   type        = string
+  default     = ""
+  sensitive   = true
+  # TODO: keep the secret in AWS SSM Parameter Store (SecureString) and have the Lambda read it at runtime;
+  # as an env var it is visible in the Lambda config and in plaintext in the tofu state (docs/TODO.md).
+}
+
+variable "recaptcha_secret_key_env" {
+  description = "Same secret supplied through the environment: export TF_VAR_recaptcha_secret_key_env=... Takes precedence over terraform.tfvars."
+  type        = string
+  default     = ""
   sensitive   = true
 }
 

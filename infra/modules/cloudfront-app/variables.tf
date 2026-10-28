@@ -30,6 +30,13 @@ variable "api_origin_domain" {
   type        = string
 }
 
+variable "api_origin_verify_secret" {
+  description = "Shared secret sent to the API origin in the X-Origin-Verify header so the backend can reject requests that bypass CloudFront. Empty disables the header."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
 variable "price_class" {
   description = "CloudFront price class."
   type        = string

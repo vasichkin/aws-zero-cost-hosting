@@ -40,4 +40,4 @@ venv/
 *.log
 
 # Website is custom info
-website/
+#website/

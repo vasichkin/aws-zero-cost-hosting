@@ -30,6 +30,16 @@ resource "aws_cloudfront_distribution" "this" {
     domain_name = var.api_origin_domain
     origin_id   = "api-gateway"
 
+    # for_each keys must not be sensitive, so only the emptiness check is unwrapped.
+    dynamic "custom_header" {
+      for_each = nonsensitive(var.api_origin_verify_secret != "") ? [1] : []
+
+      content {
+        name  = "X-Origin-Verify"
+        value = var.api_origin_verify_secret
+      }
+    }
+
     custom_origin_config {
       http_port              = 80
       https_port             = 443

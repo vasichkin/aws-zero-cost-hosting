@@ -42,6 +42,27 @@ tofu output -raw lock_table_name      # e.g. minimal-aws-tofu-lock
 
 ## Prod deploy sequence
 
+```mermaid
+flowchart TD
+  Boot["Bootstrap<br/>infra/bootstrap, local state<br/>creates state bucket + lock table"]
+  Cfg["Configure prod<br/>terraform.tfvars + backend.hcl<br/>tofu init -reconfigure"]
+  Cert["ACM certificate<br/>tofu apply -target=module.acm<br/>(us-east-1)"]
+  Val["Add validation CNAMEs<br/>at registrar"]
+  Issued["acm_wait_for_validation = true<br/>tofu apply -target=module.acm<br/>certificate ISSUED"]
+  Full["Full stack<br/>tofu apply"]
+  Wait["CloudFront deploy<br/>~5-15 min"]
+  Live["DNS cutover<br/>www CNAME to *.cloudfront.net"]
+  Test["Verify<br/>curl https://www.domain/<br/>submit contact form"]
+
+  Boot --> Cfg --> Cert --> Val --> Issued --> Full --> Wait --> Live --> Test
+```
+
+Notes:
+
+- `tofu apply` also syncs `website/` to S3 with the AWS CLI and invalidates CloudFront (`module.website_sync`), so content goes live with the full stack apply.
+- The SES sender address must be verified through the confirmation email before the contact form can send.
+- If the registrar blocks a CNAME on the apex, redirect the apex to `www`.
+
 ### 0. Configure
 
 ```bash
@@ -50,15 +71,17 @@ cp terraform.tfvars.example terraform.tfvars
 cp backend.hcl.example backend.hcl
 ```
 
-Edit `terraform.tfvars`: domain, `ses_email`, `admin_email`, `recaptcha_secret_key`, IAM boundary, tags. Optional: `recaptcha_min_score` (default 0.5).
+Edit `terraform.tfvars`: domain, `ses_email`, `admin_email`, IAM boundary, tags. Optional: `recaptcha_min_score` (default 0.5).
 
-`recaptcha_secret_key` is required and sensitive. Either replace `CHANGE_ME` in `terraform.tfvars` (the file is gitignored), or delete that line and export it instead:
+The reCAPTCHA v3 **secret** is required and sensitive. Supply it one of two ways:
 
 ```bash
-export TF_VAR_recaptcha_secret_key="<google-recaptcha-v3-secret>"
+export TF_VAR_recaptcha_secret_key_env="<google-recaptcha-v3-secret>"   # preferred; wins if both are set
 ```
 
-A value in `terraform.tfvars` overrides `TF_VAR_*`, so if you keep the `CHANGE_ME` line the environment variable is ignored and every contact submission fails reCAPTCHA.
+or uncomment `recaptcha_secret_key` in `terraform.tfvars` (gitignored). `tofu plan` fails with a clear message if neither is set. (A plain `TF_VAR_recaptcha_secret_key` would lose to `terraform.tfvars`, which is why the environment variable has its own name.) The secret should eventually live in SSM Parameter Store, see [TODO](TODO.md).
+
+The reCAPTCHA **site key** is public and is not set in Terraform: replace `CHANGE_ME` in `<meta name="recaptcha-site-key">` in `website/index.html` (and any other page with a form) with the site key from the same Google reCAPTCHA v3 registration, with your domain(s) allowed. Until then the contact form cannot get a token.
 
 Edit `backend.hcl` with bucket, table and region from bootstrap outputs.
 
@@ -113,13 +136,32 @@ This also creates the monthly AWS Budget (see [Cost alerts](#cost-alerts)).
 
 ### 4. Website content
 
-Files in `website/` are uploaded automatically on `tofu apply` (module `s3-static-sync`). After changing HTML/CSS/assets, run apply again to sync.
+`tofu apply` runs `aws s3 sync website/ --delete` (module `s3-static-sync`, needs the AWS CLI and the same credentials) and then invalidates `/*` on CloudFront, whenever the content of `website/` changed. Files are not tracked in the state, only a content hash. Dotfiles are skipped. Content types come from the AWS CLI's guess. Objects removed from `website/` are removed from the bucket (the bucket is versioned).
+
+The sync and invalidation run only when `website/` content changed (the hash in `tofu output website_sync` changes). Typical flow: edit files in `website/`, then `tofu apply` (a plan shows only `module.website_sync.terraform_data.sync` being replaced). To publish without a full apply:
 
 ```bash
-# verify upload
-tofu output site_bucket_name
-aws s3 ls s3://$(tofu output -raw site_bucket_name)/
+cd infra
+make prod-sync        # or: make dev-sync
 ```
+
+It runs `tofu output website_sync_command` (also usable by hand). Output lists every uploaded and deleted file and ends with a status line, for example:
+
+```
+upload: ../../../website/index.html to s3://my-bucket/index.html
+==> Invalidating CloudFront E123ABC (/*)
+==> Sync status: OK - uploaded: 1, deleted: 0, invalidation: I2XYZ (InProgress, usually done within a minute)
+```
+
+A failure prints `Sync status: FAILED ...` and exits non-zero. The same output appears in the `tofu apply` log. The script disables the AWS CLI pager, so no `less` window opens. The next `tofu apply` will still re-sync once, which is harmless.
+
+Verify the upload:
+
+```bash
+aws s3 ls s3://$(tofu output -raw site_bucket_name)/ --recursive
+```
+
+If the sync fails (for example expired credentials), the apply errors and the next `tofu apply` retries it. Invalidation uses a single wildcard path (`/*`), which counts as one path against the 1,000 free paths per month.
 
 Test via CloudFront default domain:
 
@@ -169,17 +211,13 @@ Do **not** point `www` → apex if apex has no records (creates a dead loop).
 
 Verify the inbox for the SES verification email (`tofu output ses_verification_note`). The contact Lambda sends from and to `ses_email`. While the account is in the SES sandbox it can only send to verified addresses, which is enough here because sender and recipient are the same verified address.
 
-### Admin panel
-
-TBD. No admin UI, admin API, authentication or content store is provisioned by this stack yet.
-
 ## API routes
 
 | CloudFront path | API Gateway route | Auth | Target |
 |---|---|---|---|
-| `POST /api/contact` | `POST /contact` | none; throttled burst 10 / 5 rps; reCAPTCHA v3 + honeypot in handler | `lambda/contact` (prod only) |
+| `POST /api/contact` | `POST /contact` | none; throttled to 1 request/minute (burst 1, all visitors combined); `X-Origin-Verify` header from CloudFront required; reCAPTCHA v3 + honeypot in handler | `lambda/contact` (prod only) |
 
-Request/response contract: see [Contact API](../README.md#contact-api).
+Request/response contract: see [lambda/contact/README.md](../lambda/contact/README.md).
 
 ## Cost alerts
 
@@ -192,7 +230,9 @@ make bootstrap-init | bootstrap-plan | bootstrap-apply   # state bucket + lock t
 make dev-init | dev-plan | dev-apply | dev-destroy
 make prod-init-first    # copy backend.hcl.example → backend.hcl, init
 make prod-init          # init with existing backend.hcl
+make prod-acm-cert | prod-acm-validate   # ACM phases A and B (see deploy steps)
 make prod-plan | prod-apply
+make prod-sync | dev-sync             # publish website/ now: aws s3 sync + CloudFront invalidation
 make fmt validate
 ```
 
@@ -209,6 +249,8 @@ make fmt validate
 | `cloudfront_domain_name` | Registrar CNAME / ALIAS target |
 | `cloudfront_distribution_id` | Manual invalidations (`aws cloudfront create-invalidation`) |
 | `site_bucket_name` | `aws s3 sync` target |
+| `website_sync` | Source directory, file count and content hash of the synced content |
+| `website_sync_command` | Manual sync + CloudFront invalidation command (used by `make prod-sync`) |
 | `bucket_layout` | S3 prefixes (`/`, `photos/`) |
 | `acm_dns_validation_records` | Phase A DNS |
 | `ses_verification_note` | SES verification reminder |
@@ -224,8 +266,8 @@ make fmt validate
 | `dig` empty after apex CNAME | Registrar rejected CNAME (MX conflict) | Use ALIAS or contact registrar |
 | Site works on `*.cloudfront.net` but not custom domain | Alias not attached | `acm_wait_for_validation = true` + re-apply |
 | `www` resolves to nothing | `www` CNAME → apex with empty apex | Point `www` → CloudFront directly |
-| `tofu plan` prompts for `recaptcha_secret_key` | Required variable not set | Set it in `terraform.tfvars` or `export TF_VAR_recaptcha_secret_key=...` |
-| Contact form returns 403 `CAPTCHA_FAILED` for everyone | Secret still `CHANGE_ME` (tfvars overrides `TF_VAR_*`), or site key / hostname mismatch | Fix `recaptcha_secret_key` in `terraform.tfvars` and re-apply |
+| `tofu plan` fails with "reCAPTCHA secret is not set" | Neither variable set | Set it in `terraform.tfvars` or `export TF_VAR_recaptcha_secret_key_env=...` |
+| Contact form returns 403 `CAPTCHA_FAILED` for everyone | Secret still `CHANGE_ME`, site key in `website/index.html` still `CHANGE_ME` or from another registration, or hostname mismatch | Fix the secret / site key and re-apply |
 | Contact form returns 500 `CONFIGURATION_ERROR` | reCAPTCHA secret/hostnames or `ALLOWED_ORIGINS` empty | Check the Lambda environment set by `module.lambda_contact` |
 
 ## Configuration reference (no hardcoded secrets in repo)
@@ -233,7 +275,8 @@ make fmt validate
 | Setting | Where |
 |---|---|
 | `domain_name`, `ses_email`, `admin_email`, tags | `terraform.tfvars` (gitignored) |
-| `recaptcha_secret_key` (required, sensitive) | `terraform.tfvars` (gitignored), or `TF_VAR_recaptcha_secret_key` with the tfvars line removed |
+| reCAPTCHA secret (required, sensitive) | `TF_VAR_recaptcha_secret_key_env` (wins) or `recaptcha_secret_key` in `terraform.tfvars` (gitignored) |
+| reCAPTCHA site key (public) | `<meta name="recaptcha-site-key">` in `website/index.html` |
 | `recaptcha_min_score` | `terraform.tfvars` — default 0.5 |
 | State backend bucket/table/region | `backend.hcl` (gitignored; template `backend.hcl.example`) |
 | IAM permissions boundary | `terraform.tfvars` |
@@ -248,7 +291,32 @@ Committed defaults (`project_name`, `aws_region`) are intentional; override in `
 | `acm` | us-east-1 cert (apex + `www`), optional validation wait |
 | `cloudfront-app` | Unified distribution, OAC bucket policy, 2 CF functions (directory index, API prefix strip), 403/404 → `/404.html` |
 | `s3-bucket` | Single bucket + OAC, SSE-S3, versioning with 30-day noncurrent-version expiry |
-| `s3-static-sync` | Uploads `website/` to the bucket on apply (content types, `Cache-Control: public, max-age=3600`) |
+| `s3-static-sync` | Runs `aws s3 sync --delete` of `website/` and a CloudFront invalidation on apply (`Cache-Control: public, max-age=3600`) |
 | `lambda` | Generic Python 3.12 ARM64 function + IAM role + log group (14-day retention); used for the contact handler |
 | `api` | HTTP API, `POST /contact` with throttling (no custom domain — reached via CloudFront) |
 | `ses-email` | Single verified email |
+
+### Dependencies
+
+```mermaid
+flowchart BT
+  ACM[module.acm]
+  Bucket[module.site_bucket]
+  Sync[module.website_sync]
+  SES[module.ses]
+  LContact[module.lambda_contact]
+  API[module.api]
+  CF[module.cloudfront]
+
+  Bucket --> Sync
+  CF -->|"distribution_id for invalidation"| Sync
+  SES -->|"IAM policy: ses:SendEmail"| LContact
+  LContact --> API
+  API --> CF
+  Bucket --> CF
+  ACM --> CF
+```
+
+`module.website_sync` runs last: it needs the bucket and the distribution, and it shells out to the AWS CLI.
+
+`aws_budgets_budget.monthly_cost` ($50/month, alerts at ~$5 / $20 / $50) stands alone. `module.cloudfront` also has an explicit `depends_on = [module.api]`.

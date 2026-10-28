@@ -1,5 +1,5 @@
 terraform {
-  required_version = ">= 1.6.0"
+  required_version = ">= 1.7.0"
 
   required_providers {
     aws = {
@@ -9,6 +9,10 @@ terraform {
     archive = {
       source  = "hashicorp/archive"
       version = "~> 2.4"
+    }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.6"
     }
   }
 
@@ -44,12 +48,29 @@ locals {
     Environment = var.environment
     ManagedBy   = "opentofu"
   })
-  www_domain         = "www.${var.domain_name}"
-  site_origin        = "https://${var.domain_name}"
-  www_origin         = "https://${local.www_domain}"
-  site_origins       = [local.site_origin, local.www_origin]
-  use_custom_domain  = var.acm_wait_for_validation
-  cloudfront_aliases = local.use_custom_domain ? [var.domain_name, local.www_domain] : []
+  # tofu always lets terraform.tfvars beat TF_VAR_<same name>, so the environment uses its own variable and wins here.
+  recaptcha_secret_key = var.recaptcha_secret_key_env != "" ? var.recaptcha_secret_key_env : var.recaptcha_secret_key
+  www_domain           = "www.${var.domain_name}"
+  site_origin          = "https://${var.domain_name}"
+  www_origin           = "https://${local.www_domain}"
+  site_origins         = [local.site_origin, local.www_origin]
+  use_custom_domain    = var.acm_wait_for_validation
+  cloudfront_aliases   = local.use_custom_domain ? [var.domain_name, local.www_domain] : []
+}
+
+resource "terraform_data" "require_recaptcha_secret" {
+  lifecycle {
+    precondition {
+      condition     = local.recaptcha_secret_key != ""
+      error_message = "reCAPTCHA secret is not set. Export TF_VAR_recaptcha_secret_key_env or set recaptcha_secret_key in terraform.tfvars."
+    }
+  }
+}
+
+# Shared between CloudFront (sends it) and the Lambda (requires it): blocks direct hits on the execute-api URL.
+resource "random_password" "origin_verify" {
+  length  = 40
+  special = false
 }
 
 data "aws_iam_policy_document" "contact_lambda" {
@@ -85,9 +106,10 @@ module "site_bucket" {
 module "website_sync" {
   source = "../../modules/s3-static-sync"
 
-  bucket_id  = module.site_bucket.bucket_id
-  source_dir = "${path.module}/../../../website"
-  tags       = local.common_tags
+  bucket_id       = module.site_bucket.bucket_id
+  source_dir      = "${path.module}/../../../website"
+  distribution_id = module.cloudfront.distribution_id
+  region          = var.aws_region
 }
 
 module "ses" {
@@ -111,10 +133,11 @@ module "lambda_contact" {
     SES_TO_EMAIL                 = var.ses_email
     AWS_REGION_NAME              = var.aws_region
     ALLOWED_ORIGINS              = join(",", local.site_origins)
-    RECAPTCHA_SECRET_KEY         = var.recaptcha_secret_key
+    RECAPTCHA_SECRET_KEY         = local.recaptcha_secret_key
     RECAPTCHA_EXPECTED_HOSTNAMES = join(",", [var.domain_name, local.www_domain])
     RECAPTCHA_EXPECTED_ACTION    = "contact"
     RECAPTCHA_MIN_SCORE          = tostring(var.recaptcha_min_score)
+    ORIGIN_VERIFY_SECRET         = random_password.origin_verify.result
   }
 
   policy_json              = data.aws_iam_policy_document.contact_lambda.json
@@ -130,8 +153,8 @@ module "api" {
   contact_lambda_invoke_arn      = module.lambda_contact.invoke_arn
   contact_lambda_function_name   = module.lambda_contact.function_name
   enable_contact_route           = true
-  contact_throttling_burst_limit = 10
-  contact_throttling_rate_limit  = 5
+  contact_throttling_burst_limit = 1
+  contact_throttling_rate_limit  = 1 / 60 # 1 request per minute, shared by all visitors
   tags                           = local.common_tags
 }
 
@@ -142,6 +165,8 @@ module "cloudfront" {
   aliases             = local.cloudfront_aliases
   acm_certificate_arn = local.use_custom_domain ? module.acm.certificate_arn : ""
   api_origin_domain   = replace(module.api.api_endpoint, "https://", "")
+
+  api_origin_verify_secret = random_password.origin_verify.result
 
   site_bucket = {
     id                       = module.site_bucket.bucket_id

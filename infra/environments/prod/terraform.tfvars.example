@@ -5,7 +5,10 @@ aws_region   = "eu-west-3"
 domain_name = "example.com"
 ses_email   = "noreply@example.com"
 admin_email = "admin@example.com"
-recaptcha_secret_key = "CHANGE_ME"
+
+# reCAPTCHA v3 secret: either export TF_VAR_recaptcha_secret_key_env (wins if both are set)
+# or uncomment the line below. Ideally it belongs in SSM Parameter Store (docs/TODO.md).
+# recaptcha_secret_key = "CHANGE_ME"
 
 acm_wait_for_validation = false   # set true after registrar ACM CNAMEs propagate
 
