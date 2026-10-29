@@ -11,6 +11,7 @@ dist/
 **/*.tfstate.*
 **/terraform.tfvars
 **/backend.hcl
+infra/iam/rendered/
 **/.terraform.lock.hcl
 crash.log
 override.tf

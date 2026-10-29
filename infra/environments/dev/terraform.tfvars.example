@@ -2,6 +2,9 @@ project_name = "minimal-aws"
 environment  = "dev"
 aws_region   = "eu-west-3"
 
+# Globally unique S3 bucket for the site content.
+site_bucket_name = "minimal-aws-dev-site"
+
 # iam_permissions_boundary_arn = "arn:aws:iam::ACCOUNT_ID:policy/YourBoundaryPolicy"
 
 tags = {

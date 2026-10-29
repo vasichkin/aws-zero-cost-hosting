@@ -1,6 +1,9 @@
 project_name = "minimal-aws"
 aws_region   = "eu-west-3"
 
+# Globally unique. Must match `bucket` in infra/environments/prod/backend.hcl.
+state_bucket_name = "minimal-aws-tofu-state"
+
 tags = {
   Owner   = "your-name"
   Project = "minimal_aws_hosting"

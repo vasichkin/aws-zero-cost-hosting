@@ -31,12 +31,14 @@ cp terraform.tfvars.example terraform.tfvars
 tofu init && tofu apply
 ```
 
+Set `state_bucket_name` in `terraform.tfvars` (or run `make setup`). Bucket names are global across all AWS accounts, so pick a unique one; it is stated explicitly rather than derived from `project_name`.
+
 Bootstrap uses local state (`infra/bootstrap/terraform.tfstate`) — back it up, don't commit it.
 
 Record outputs:
 
 ```bash
-tofu output -raw state_bucket_name    # e.g. minimal-aws-tofu-state
+tofu output -raw state_bucket_name    # same value as state_bucket_name in terraform.tfvars
 ```
 
 ## Prod deploy sequence
@@ -70,7 +72,7 @@ cp terraform.tfvars.example terraform.tfvars
 cp backend.hcl.example backend.hcl
 ```
 
-Edit `terraform.tfvars`: domain, `ses_email`, `admin_email`, IAM boundary, tags. Optional: `recaptcha_min_score` (default 0.5).
+Edit `terraform.tfvars`: `site_bucket_name` (globally unique), domain, `ses_email`, `admin_email`, IAM boundary, tags. Optional: `recaptcha_min_score` (default 0.5).
 
 The reCAPTCHA v3 **secret** is required and sensitive. Supply it one of two ways:
 
@@ -82,7 +84,7 @@ or uncomment `recaptcha_secret_key` in `terraform.tfvars` (gitignored). `tofu pl
 
 The reCAPTCHA **site key** is public and is not set in Terraform: replace `CHANGE_ME` in `<meta name="recaptcha-site-key">` in `website/index.html` (and any other page with a form) with the site key from the same Google reCAPTCHA v3 registration, with your domain(s) allowed. Until then the contact form cannot get a token.
 
-Edit `backend.hcl` with the bucket and region from bootstrap outputs. State locking is S3-native (`use_lockfile` in `main.tf`), so no lock table is needed.
+Edit `backend.hcl`: `bucket` must equal `state_bucket_name` from `infra/bootstrap/terraform.tfvars`, and `region` must equal `aws_region`. State locking is S3-native (`use_lockfile` in `main.tf`), so no lock table is needed.
 
 ```bash
 tofu init -reconfigure -backend-config=backend.hcl
@@ -274,7 +276,8 @@ The site bucket is created with `force_destroy`, because website content is uplo
 
 | Setting | Where |
 |---|---|
-| `domain_name`, `ses_email`, `admin_email`, tags | `terraform.tfvars` (gitignored) |
+| `site_bucket_name`, `domain_name`, `ses_email`, `admin_email`, tags | `terraform.tfvars` (gitignored) |
+| `state_bucket_name` | `infra/bootstrap/terraform.tfvars` (gitignored); repeat it as `bucket` in `backend.hcl` |
 | reCAPTCHA secret (required, sensitive) | `TF_VAR_recaptcha_secret_key_env` (wins) or `recaptcha_secret_key` in `terraform.tfvars` (gitignored) |
 | reCAPTCHA site key (public) | `<meta name="recaptcha-site-key">` in `website/index.html` |
 | `recaptcha_min_score` | `terraform.tfvars` — default 0.5 |

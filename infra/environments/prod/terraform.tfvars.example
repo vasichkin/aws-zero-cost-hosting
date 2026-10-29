@@ -2,6 +2,9 @@ project_name = "minimal-aws"
 environment  = "prod"
 aws_region   = "eu-west-3"
 
+# Globally unique S3 bucket for the site content.
+site_bucket_name = "minimal-aws-prod-site"
+
 domain_name = "example.com"
 ses_email   = "noreply@example.com"
 admin_email = "admin@example.com"

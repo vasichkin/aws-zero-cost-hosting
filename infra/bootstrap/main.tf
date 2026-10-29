@@ -1,8 +1,8 @@
 resource "aws_s3_bucket" "state" {
-  bucket = "${var.project_name}-tofu-state"
+  bucket = var.state_bucket_name
 
   tags = {
-    Name = "${var.project_name}-tofu-state"
+    Name = var.state_bucket_name
   }
 }
 

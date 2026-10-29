@@ -49,13 +49,15 @@ docs/            Project context, architecture diagrams, budget
 Prerequisites: OpenTofu >= 1.7, AWS CLI with working credentials, a Google reCAPTCHA v3 key pair (site key + secret), access to your registrar's DNS. Run everything from the repository root.
 
 ```bash
-# 1. Remote state (once per AWS account). Note the bucket name it prints.
-cp infra/bootstrap/terraform.tfvars.example infra/bootstrap/terraform.tfvars   # edit tags/region
+# 0. Wizard: asks project name, region, bucket names (state, prod site, dev site), domain, emails, owner, IAM boundary; validates the answers
+#    and writes the tfvars + backend.hcl files from the *.example templates (asks before overwriting).
+#    Optionally also patches the IAM policy templates into infra/iam/rendered/ for an admin to create.
+make setup
+
+# 1. Remote state (once per AWS account)
 make bootstrap
 
-# 2. Configure prod
-cp infra/environments/prod/terraform.tfvars.example infra/environments/prod/terraform.tfvars   # domain, emails, IAM boundary, tags
-cp infra/environments/prod/backend.hcl.example infra/environments/prod/backend.hcl             # bucket/region from step 1
+# 2. Configure prod secrets (the wizard never writes them)
 export TF_VAR_recaptcha_secret_key_env="<recaptcha-v3-secret>"
 # put the reCAPTCHA *site* key into website/index.html (replace CHANGE_ME in the recaptcha-site-key meta tag)
 
@@ -79,6 +81,7 @@ Day-to-day:
 | `make prod-sync` | Publish `website/` now: `aws s3 sync` + CloudFront invalidation, no full apply |
 | `make prod-apply` | Apply infrastructure changes (also syncs the website when its content changed) |
 | `make dev-apply` / `dev-sync` / `dev-destroy` | The same for the dev environment (local state, CloudFront default domain) |
+| `make setup` | Wizard: asks project name, region, bucket names (state, prod site, dev site), domain, emails, owner tag and IAM boundary, validates them, and writes `terraform.tfvars` / `backend.hcl` from the `*.example` files; optionally patches the IAM policy templates into `infra/iam/rendered/` (asks before overwriting; `scripts/setup.sh --force` skips the question) |
 | `make prod-destroy` | Destroy prod (asks for confirmation; deletes the site bucket and its content) |
 
 Add `ARGS=-auto-approve` to skip tofu's confirmation, for example `make dev-destroy ARGS=-auto-approve`. Details, DNS tables, troubleshooting and the deploy sequence diagram: [docs/INFRA.md](docs/INFRA.md).

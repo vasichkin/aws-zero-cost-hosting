@@ -36,7 +36,7 @@ Code defaults to **eu-west-3**. The current deployment uses **eu-north-1** (`aws
 - **ACM in us-east-1** — CloudFront requirement
 - **`acm_wait_for_validation` flag** — two-phase deploy: cert first without alias, then attach domain after validation
 - **Permissions boundary** — optional variable for orgs that require it on Lambda roles
-- **Backend config externalized** — `backend.hcl` gitignored (template `backend.hcl.example`); names derived from bootstrap `project_name`
+- **Backend config externalized** — `backend.hcl` gitignored (template `backend.hcl.example`); `bucket` must equal `state_bucket_name` from the bootstrap tfvars. All bucket names (`state_bucket_name`, `site_bucket_name`) are stated explicitly in tfvars, never derived, because S3 names are global
 - **reCAPTCHA secret** — `recaptcha_secret_key` in gitignored `terraform.tfvars` (or `TF_VAR_recaptcha_secret_key` with the tfvars line removed); never committed
 
 ## Operational notes

@@ -101,7 +101,7 @@ module "acm" {
 module "site_bucket" {
   source = "../../modules/s3-bucket"
 
-  bucket_name = "${local.name_prefix}-site"
+  bucket_name = var.site_bucket_name
   # Site content is uploaded by aws s3 sync (not in state), so destroy must empty the bucket itself.
   force_destroy = true
   tags          = local.common_tags
